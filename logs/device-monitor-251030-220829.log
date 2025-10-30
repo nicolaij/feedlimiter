@@ -1,0 +1,338 @@
+I (1579) main: ADC0:  0.4; DAC0:    0; PID: 21.755
+I (2209) main: ADC0:  0.4; DAC0:    0; PID: 21.755
+I (2849) main: ADC0:  0.2; DAC0:    0; PID: 21.755
+I (3489) main: ADC0:  0.2; DAC0:    0; PID: 21.755
+I (4119) main: ADC0:  0.6; DAC0:    0; PID: 21.755
+I (4759) main: ADC0:  0.7; DAC0:    0; PID: 21.745
+I (5389) main: ADC0:  0.4; DAC0:    0; PID: 21.755
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (29) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (29) boot: compile time Oct 30 2025 21:25:56
+I (29) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (37) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5cch ( 54732) map
+I (106) esp_image: segment 1: paddr=0001d5f4 vaddr=3ff80000 size=00020h (    32) load
+I (107) esp_image: segment 2: paddr=0001d61c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fda8 vaddr=40080000 size=00270h (   624) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22830h (141360) map
+I (174) esp_image: segment 5: paddr=00042858 vaddr=40080270 size=0f408h ( 62472) load
+I (206) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (225) cpu_start: Pro cpu start user code
+I (225) cpu_start: cpu freq: 160000000 Hz
+I (225) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  f8edb1d9f...
+I (243) app_init: ESP-IDF:          5.5.0
+I (247) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (265) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (270) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (286) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (295) spi_flash: flash io: dio
+I (299) main_task: Started on CPU0
+I (309) main_task: Calling app_main()
+E (309) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (309) button: IoT Button Version: 4.1.4
+I (309) led_gpio: LED Indicator Version: 2.0.2
+I (319) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+E (369) storage: Error (ESP_ERR_NVS_NOT_FOUND) opening NVS handle!
+I (939) main: ADC0 offset: 1235.840054
+I (1579) main: ADC0:  1.5; DAC0:    0; PID: 21.745
+I (2209) main: ADC0:  1.0; DAC0:    0; PID: 21.745
+I (2849) main: ADC0:  1.9; DAC0:    0; PID: 21.735
+I (3489) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (4119) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (4759) main: ADC0:  1.9; DAC0:    0; PID: 21.735
+I (5389) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (6029) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (6659) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (7299) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (7929) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (8569) main: ADC0:  2.5; DAC0:    0; PID: 21.735
+I (9209) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (9839) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (10479) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (11109) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (11749) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (12379) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (13019) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (13649) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (14289) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (14929) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (15559) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (16199) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (16829) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (17469) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (18099) main: ADC0:  3.0; DAC0:    0; PID: 21.735
+I (18739) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (19369) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (20009) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (20649) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (21279) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (21919) main: ADC0:  2.3; DAC0:    0; PID: 21.725
+I (22549) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (23189) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (23819) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (24459) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (25089) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (25729) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (26369) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (26999) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (27639) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (28269) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (28909) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (29539) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (30179) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (30809) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (31449) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (32089) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (32719) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (33359) main: ADC0:  3.3; DAC0:    0; PID: 21.725
+I (33989) main: ADC0:  3.4; DAC0:    0; PID: 21.725
+I (34629) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (35259) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (35899) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (36529) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (37169) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (37809) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (38439) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (39079) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (39709) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (40349) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (40979) main: ADC0:  2.9; DAC0:    0; PID: 21.735
+I (41619) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (42249) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (42889) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (43529) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (44159) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (44799) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (45429) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (46069) main: ADC0:  3.4; DAC0:    0; PID: 21.725
+I (46699) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (47339) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (47969) main: ADC0:  3.2; DAC0:    0; PID: 21.715
+I (48609) main: ADC0:  3.1; DAC0:    0; PID: 21.725
+I (49249) main: ADC0:  3.3; DAC0:    0; PID: 21.715
+I (49879) main: ADC0:  3.6; DAC0:    0; PID: 21.725
+I (50519) main: ADC0:  3.6; DAC0:    0; PID: 21.715
+I (51149) main: ADC0:  3.8; DAC0:    0; PID: 21.715
+I (51789) main: ADC0:  3.9; DAC0:    0; PID: 21.715
+I (52419) main: ADC0:  3.8; DAC0:    0; PID: 21.725
+I (53059) main: ADC0:  3.9; DAC0:    0; PID: 21.715
+I (53689) main: ADC0:  4.0; DAC0:    0; PID: 21.715
+I (54329) main: ADC0:  3.6; DAC0:    0; PID: 21.725
+I (54969) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (55599) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (56239) main: ADC0:  3.5; DAC0:    0; PID: 21.715
+I (56869) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (57509) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (58139) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (58779) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (59409) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (60049) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (60689) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (61319) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (61959) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (62589) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (63229) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (63859) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (64499) main: ADC0:  3.0; DAC0:    0; PID: 21.735
+I (65129) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (65769) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (66409) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (67039) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (67679) main: ADC0:  2.9; DAC0:    0; PID: 21.735
+I (68309) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (68949) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (69579) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (70219) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (70849) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (71489) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (72129) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (72759) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (73399) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (74029) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (74669) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (75299) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (75939) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (76569) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (77209) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (77849) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (78479) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (79119) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (79749) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (80389) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (81019) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (81659) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (82289) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (82929) main: ADC0:  3.0; DAC0:    0; PID: 21.735
+I (83569) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (84199) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (84839) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (85469) main: ADC0:  2.9; DAC0:    0; PID: 21.735
+I (86109) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (86739) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (87379) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (88009) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (88649) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (89289) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (89919) main: ADC0:  3.4; DAC0:    0; PID: 21.725
+I (90559) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (91189) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (91829) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (92459) main: ADC0:  3.2; DAC0:    0; PID: 21.725
+I (93099) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (93729) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (94369) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (95009) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (95639) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (96279) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (96909) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (97549) main: ADC0:  2.8; DAC0:    0; PID: 21.735
+I (98179) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (98819) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (99449) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (100089) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (100729) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (101359) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (101999) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (102629) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (103269) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (103899) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (104539) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (105169) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (105809) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (106449) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (107079) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (107719) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (108349) main: ADC0:  2.5; DAC0:    0; PID: 21.725
+I (108989) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (109619) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (110259) main: ADC0:  2.8; DAC0:    0; PID: 21.735
+I (110889) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (111529) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (112169) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (112799) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (113439) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (114069) main: ADC0:  2.1; DAC0:    0; PID: 21.735
+I (114709) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (115339) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (115979) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (116609) main: ADC0:  2.5; DAC0:    0; PID: 21.725
+I (117249) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (117889) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (118519) main: ADC0:  2.3; DAC0:    0; PID: 21.725
+I (119159) main: ADC0:  2.8; DAC0:    0; PID: 21.735
+I (119789) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (120429) main: ADC0:  2.9; DAC0:    0; PID: 21.735
+I (121059) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (121699) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (122329) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (122969) main: ADC0:  3.0; DAC0:    0; PID: 21.735
+I (123609) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (124239) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (124879) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (125509) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (126149) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (126779) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (127419) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (128049) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (128689) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (129329) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (129959) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (130599) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (131229) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (131869) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (132499) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (133139) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (133769) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (134409) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (135049) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (135679) main: ADC0:  2.8; DAC0:    0; PID: 21.735
+I (136319) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (136949) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (137589) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (138219) main: ADC0:  2.3; DAC0:    0; PID: 21.725
+I (138859) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (139489) main: ADC0:  2.8; DAC0:    0; PID: 21.735
+I (140129) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (140769) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (141399) main: ADC0:  2.1; DAC0:    0; PID: 21.735
+I (142039) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (142669) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (143309) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (143939) main: ADC0:  2.1; DAC0:    0; PID: 21.735
+I (144579) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (145209) main: ADC0:  2.4; DAC0:    0; PID: 21.725
+I (145849) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (146489) main: ADC0:  2.4; DAC0:    0; PID: 21.725
+I (147119) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (147759) main: ADC0:  2.9; DAC0:    0; PID: 21.735
+I (148389) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (149029) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (149659) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (150299) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (150929) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (151569) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (152209) main: ADC0:  2.5; DAC0:    0; PID: 21.735
+I (152839) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (153479) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (154109) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (154749) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (155379) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (156019) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (156649) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (157289) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (157929) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (158559) main: ADC0:  3.0; DAC0:    0; PID: 21.725
+I (159199) main: ADC0:  2.6; DAC0:    0; PID: 21.735
+I (159829) main: ADC0:  2.8; DAC0:    0; PID: 21.725
+I (160469) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (161099) main: ADC0:  2.1; DAC0:    0; PID: 21.735
+I (161739) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (162369) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (163009) main: ADC0:  2.9; DAC0:    0; PID: 21.725
+I (163649) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (164279) main: ADC0:  2.5; DAC0:    0; PID: 21.735
+I (164919) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (165549) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (166189) main: ADC0:  2.1; DAC0:    0; PID: 21.735
+I (166819) main: ADC0:  2.7; DAC0:    0; PID: 21.725
+I (167459) main: ADC0:  2.6; DAC0:    0; PID: 21.725
+I (168089) main: ADC0:  2.3; DAC0:    0; PID: 21.735
+I (168729) main: ADC0:  2.4; DAC0:    0; PID: 21.735
+I (169369) main: ADC0:  2.3; DAC0:    0; PID: 21.725
+I (169999) main: ADC0:  2.7; DAC0:    0; PID: 21.735
+I (170639) main: ADC0:  2.2; DAC0:    0; PID: 21.735
+I (171269) main: ADC0:  2.1; DAC0:    0; PID: 21.725
+I (171909) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (172539) main: ADC0:  2.0; DAC0:    0; PID: 21.725

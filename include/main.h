@@ -15,8 +15,8 @@
 #include <sys/time.h>
 #include "esp_sleep.h"
 
-#define LED_PIN GPIO_NUM_2
-#define BTN_PIN GPIO_NUM_0
+#define LED_PIN GPIO_NUM_19
+#define BTN_PIN GPIO_NUM_39
 
 typedef struct
 {
@@ -30,5 +30,6 @@ typedef struct
 
 void btn_task(void *arg);
 void console_task(void *arg);
+void adc_task(void *arg);
 
 #endif

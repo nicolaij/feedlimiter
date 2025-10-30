@@ -1,0 +1,511 @@
+I (1599) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (2239) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (2869) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (3509) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (4149) main: ADC0: 0.663325; DAC0:    0; PID: 21.745001
+I (4779) main: ADC0: 0.800000; DAC0:    0; PID: 21.745001
+I (5419) main: ADC0: 0.489898; DAC0:    0; PID: 21.755001
+I (6049) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (6689) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (7319) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (7959) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (8589) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (9229) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (9869) main: ADC0: 0.529150; DAC0:    0; PID: 21.755001
+I (10499) main: ADC0: 0.346410; DAC0:    0; PID: 21.745001
+I (11139) main: ADC0: 0.774597; DAC0:    0; PID: 21.755001
+I (11769) main: ADC0: 0.959166; DAC0:    0; PID: 21.764999
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (29) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (29) boot: compile time Oct 30 2025 21:25:56
+I (29) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (37) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5bch ( 54716) map
+I (106) esp_image: segment 1: paddr=0001d5e4 vaddr=3ff80000 size=00020h (    32) load
+I (107) esp_image: segment 2: paddr=0001d60c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fd98 vaddr=40080000 size=00280h (   640) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22838h (141368) map
+I (174) esp_image: segment 5: paddr=00042860 vaddr=40080280 size=0f3f8h ( 62456) load
+I (206) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (225) cpu_start: Pro cpu start user code
+I (225) cpu_start: cpu freq: 160000000 Hz
+I (225) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  6359c7086...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (265) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (270) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (286) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (295) spi_flash: flash io: dio
+I (299) main_task: Started on CPU0
+I (309) main_task: Calling app_main()
+E (309) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (309) button: IoT Button Version: 4.1.4
+I (309) led_gpio: LED Indicator Version: 2.0.2
+I (319) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+E (369) storage: Error (ESP_ERR_NVS_NOT_FOUND) opening NVS handle!
+I (939) main: ADC0 offset: 1236.200065
+I (969) main: ADC0: 1236.200065; DAC0:   77; PID: 21.755001
+I (1599) main: ADC0: 0.663325; DAC0:    0; PID: 21.745001
+I (2239) main: ADC0: 0.632456; DAC0:    0; PID: 21.755001
+I (2869) main: ADC0: 0.800000; DAC0:    0; PID: 21.745001
+I (3509) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (4149) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (4779) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (5419) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (6049) main: ADC0: 1.113553; DAC0:    0; PID: 21.735001
+I (6689) main: ADC0: 1.311488; DAC0:    0; PID: 21.745001
+I (7319) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (7959) main: ADC0: 1.166190; DAC0:    0; PID: 21.745001
+I (8589) main: ADC0: 1.216553; DAC0:    0; PID: 21.745001
+I (9229) main: ADC0: 1.843909; DAC0:    0; PID: 21.735001
+I (9869) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (10499) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (11139) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (11769) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (12409) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (13039) main: ADC0: 1.939072; DAC0:    0; PID: 21.745001
+I (13679) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (14309) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (14949) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (15589) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (16219) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (16859) main: ADC0: 1.907878; DAC0:    0; PID: 21.735001
+I (17489) main: ADC0: 1.811077; DAC0:    0; PID: 21.735001
+I (18129) main: ADC0: 1.876166; DAC0:    0; PID: 21.735001
+I (18759) main: ADC0: 1.876166; DAC0:    0; PID: 21.735001
+I (19399) main: ADC0: 1.811077; DAC0:    0; PID: 21.735001
+I (20029) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (20669) main: ADC0: 1.483240; DAC0:    0; PID: 21.745001
+I (21309) main: ADC0: 1.743560; DAC0:    0; PID: 21.745001
+I (21939) main: ADC0: 1.708801; DAC0:    0; PID: 21.735001
+I (22579) main: ADC0: 1.637071; DAC0:    0; PID: 21.735001
+I (23209) main: ADC0: 1.708801; DAC0:    0; PID: 21.735001
+I (23849) main: ADC0: 1.600000; DAC0:    0; PID: 21.745001
+I (24479) main: ADC0: 1.600000; DAC0:    0; PID: 21.735001
+I (25119) main: ADC0: 1.523155; DAC0:    0; PID: 21.735001
+I (25749) main: ADC0: 2.000000; DAC0:    0; PID: 21.745001
+I (26389) main: ADC0: 1.907878; DAC0:    0; PID: 21.735001
+I (27029) main: ADC0: 1.743560; DAC0:    0; PID: 21.735001
+I (27659) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (28299) main: ADC0: 1.562050; DAC0:    0; PID: 21.735001
+I (28929) main: ADC0: 1.113553; DAC0:    0; PID: 21.745001
+I (29569) main: ADC0: 1.264911; DAC0:    0; PID: 21.745001
+I (30199) main: ADC0: 1.264911; DAC0:    0; PID: 21.745001
+I (30839) main: ADC0: 1.637071; DAC0:    0; PID: 21.735001
+I (31469) main: ADC0: 1.743560; DAC0:    0; PID: 21.735001
+I (32109) main: ADC0: 1.939072; DAC0:    0; PID: 21.745001
+I (32749) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (33379) main: ADC0: 1.166190; DAC0:    0; PID: 21.745001
+I (34019) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (34649) main: ADC0: 1.264911; DAC0:    0; PID: 21.745001
+I (35289) main: ADC0: 1.743560; DAC0:    0; PID: 21.745001
+I (35919) main: ADC0: 1.356466; DAC0:    0; PID: 21.735001
+I (36559) main: ADC0: 1.483240; DAC0:    0; PID: 21.745001
+I (37189) main: ADC0: 1.483240; DAC0:    0; PID: 21.735001
+I (37829) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (38469) main: ADC0: 1.939072; DAC0:    0; PID: 21.735001
+I (39099) main: ADC0: 1.743560; DAC0:    0; PID: 21.745001
+I (39739) main: ADC0: 1.442221; DAC0:    0; PID: 21.745001
+I (40369) main: ADC0: 1.708801; DAC0:    0; PID: 21.735001
+I (41009) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (41639) main: ADC0: 1.939072; DAC0:    0; PID: 21.735001
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (29) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (29) boot: compile time Oct 30 2025 21:25:56
+I (29) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (37) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5bch ( 54716) map
+I (106) esp_image: segment 1: paddr=0001d5e4 vaddr=3ff80000 size=00020h (    32) load
+I (107) esp_image: segment 2: paddr=0001d60c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fd98 vaddr=40080000 size=00280h (   640) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22838h (141368) map
+I (174) esp_image: segment 5: paddr=00042860 vaddr=40080280 size=0f3f8h ( 62456) load
+I (206) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (225) cpu_start: Pro cpu start user code
+I (225) cpu_start: cpu freq: 160000000 Hz
+I (225) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  6359c7086...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (265) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (269) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (286) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (295) spi_flash: flash io: dio
+I (299) main_task: Started on CPU0
+I (309) main_task: Calling app_main()
+E (309) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (309) button: IoT Button Version: 4.1.4
+I (309) led_gpio: LED Indicator Version: 2.0.2
+I (319) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+E (369) storage: Error (ESP_ERR_NVS_NOT_FOUND) opening NVS handle!
+I (939) main: ADC0 offset: 1237.080030
+I (969) main: ADC0: 1237.080030; DAC0:   77; PID: 21.755001
+I (1599) main: ADC0: 0.663325; DAC0:    0; PID: 21.755001
+I (2239) main: ADC0: 0.692820; DAC0:    0; PID: 21.745001
+I (2869) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (3509) main: ADC0: 1.058301; DAC0:    0; PID: 21.735001
+I (4149) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (4779) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (5419) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (6049) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (6689) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (7319) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (7959) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (8589) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (9229) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (9869) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (10499) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (11139) main: ADC0: 0.800000; DAC0:    0; PID: 21.755001
+I (11769) main: ADC0: 0.774597; DAC0:    0; PID: 21.745001
+I (12409) main: ADC0: 0.916515; DAC0:    0; PID: 21.745001
+I (13039) main: ADC0: 0.979796; DAC0:    0; PID: 21.755001
+I (13679) main: ADC0: 0.848528; DAC0:    0; PID: 21.755001
+I (14309) main: ADC0: 0.489898; DAC0:    0; PID: 21.755001
+I (14949) main: ADC0: 0.529150; DAC0:    0; PID: 21.745001
+I (15589) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (16219) main: ADC0: 0.489898; DAC0:    0; PID: 21.755001
+I (16859) main: ADC0: 0.632456; DAC0:    0; PID: 21.755001
+I (17489) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (18129) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (18759) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (19399) main: ADC0: 0.824621; DAC0:    0; PID: 21.745001
+I (20029) main: ADC0: 0.632456; DAC0:    0; PID: 21.755001
+I (20669) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (21309) main: ADC0: 0.400000; DAC0:    0; PID: 21.745001
+I (21939) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (22579) main: ADC0: 0.529150; DAC0:    0; PID: 21.755001
+I (23209) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (23849) main: ADC0: 0.200000; DAC0:    0; PID: 21.745001
+I (24479) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (25119) main: ADC0: 0.529150; DAC0:    0; PID: 21.755001
+I (25749) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (26389) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (27029) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (27659) main: ADC0: 0.400000; DAC0:    0; PID: 21.745001
+I (28299) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (28929) main: ADC0: 0.489898; DAC0:    0; PID: 21.755001
+I (29569) main: ADC0: 0.632456; DAC0:    0; PID: 21.745001
+I (30199) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (30839) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (31469) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (32109) main: ADC0: 0.400000; DAC0:    0; PID: 21.745001
+I (32749) main: ADC0: 0.748331; DAC0:    0; PID: 21.755001
+I (33379) main: ADC0: 0.721110; DAC0:    0; PID: 21.745001
+I (34019) main: ADC0: 0.748331; DAC0:    0; PID: 21.745001
+I (34649) main: ADC0: 0.632456; DAC0:    0; PID: 21.745001
+I (35289) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (35919) main: ADC0: 0.692820; DAC0:    0; PID: 21.745001
+I (36559) main: ADC0: 1.039230; DAC0:    0; PID: 21.745001
+I (37189) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (37829) main: ADC0: 0.871780; DAC0:    0; PID: 21.745001
+I (38469) main: ADC0: 0.938083; DAC0:    0; PID: 21.755001
+I (39099) main: ADC0: 0.748331; DAC0:    0; PID: 21.755001
+I (39739) main: ADC0: 0.871780; DAC0:    0; PID: 21.745001
+I (40369) main: ADC0: 0.692820; DAC0:    0; PID: 21.755001
+I (41009) main: ADC0: 0.663325; DAC0:    0; PID: 21.745001
+I (41639) main: ADC0: 0.871780; DAC0:    0; PID: 21.755001
+I (42279) main: ADC0: 0.774597; DAC0:    0; PID: 21.745001
+I (42909) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (43549) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (44189) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (44819) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (45459) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (46089) main: ADC0: 0.916515; DAC0:    0; PID: 21.745001
+I (46729) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (47359) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (47999) main: ADC0: 0.894427; DAC0:    0; PID: 21.755001
+I (48629) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (49269) main: ADC0: 0.959166; DAC0:    0; PID: 21.755001
+I (49909) main: ADC0: 0.800000; DAC0:    0; PID: 21.745001
+I (50539) main: ADC0: 0.894427; DAC0:    0; PID: 21.755001
+I (51179) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (51809) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (52449) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (53079) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (53719) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (54349) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (54989) main: ADC0: 0.916515; DAC0:    0; PID: 21.745001
+I (55629) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (56259) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (56899) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (57529) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (58169) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (58799) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (59439) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (60069) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (60709) main: ADC0: 0.938083; DAC0:    0; PID: 21.745001
+I (61349) main: ADC0: 0.848528; DAC0:    0; PID: 21.755001
+I (61979) main: ADC0: 0.565685; DAC0:    0; PID: 21.755001
+I (62619) main: ADC0: 0.894427; DAC0:    0; PID: 21.745001
+I (63249) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (63889) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (64519) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (65159) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (65789) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (66429) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (67069) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (67699) main: ADC0: 0.916515; DAC0:    0; PID: 21.745001
+I (68339) main: ADC0: 0.824621; DAC0:    0; PID: 21.755001
+I (68969) main: ADC0: 1.019804; DAC0:    0; PID: 21.745001
+I (69609) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (70239) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (70879) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (71509) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (72149) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (72789) main: ADC0: 1.166190; DAC0:    0; PID: 21.745001
+I (73419) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (74059) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (74689) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (75329) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (75959) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (76599) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (77229) main: ADC0: 0.748331; DAC0:    0; PID: 21.755001
+I (77869) main: ADC0: 0.894427; DAC0:    0; PID: 21.755001
+I (78509) main: ADC0: 0.824621; DAC0:    0; PID: 21.745001
+I (79139) main: ADC0: 0.894427; DAC0:    0; PID: 21.745001
+I (79779) main: ADC0: 0.894427; DAC0:    0; PID: 21.745001
+I (80409) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (81049) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (81679) main: ADC0: 0.916515; DAC0:    0; PID: 21.745001
+I (82319) main: ADC0: 0.489898; DAC0:    0; PID: 21.755001
+I (82949) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (83589) main: ADC0: 0.400000; DAC0:    0; PID: 21.745001
+I (84229) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (84859) main: ADC0: 0.848528; DAC0:    0; PID: 21.745001
+I (85499) main: ADC0: 0.529150; DAC0:    0; PID: 21.745001
+I (86129) main: ADC0: 0.489898; DAC0:    0; PID: 21.745001
+I (86769) main: ADC0: 0.632456; DAC0:    0; PID: 21.745001
+I (87399) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (88039) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (88669) main: ADC0: 0.663325; DAC0:    0; PID: 21.745001
+I (89309) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (89949) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (90579) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (91219) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (91849) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (92489) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (93119) main: ADC0: 0.489898; DAC0:    0; PID: 21.745001
+I (93759) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (94389) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (95029) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (95669) main: ADC0: 0.346410; DAC0:    0; PID: 21.745001
+I (96299) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (96939) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (97569) main: ADC0: 0.565685; DAC0:    0; PID: 21.764999
+I (98209) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (98839) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (99479) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (100109) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (100749) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (101389) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (102019) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (102659) main: ADC0: 0.400000; DAC0:    0; PID: 21.764999
+I (103289) main: ADC0: 0.894427; DAC0:    0; PID: 21.755001
+I (103929) main: ADC0: 0.692820; DAC0:    0; PID: 21.764999
+I (104559) main: ADC0: 0.565685; DAC0:    0; PID: 21.755001
+I (105199) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (105829) main: ADC0: 0.632456; DAC0:    0; PID: 21.755001
+I (106469) main: ADC0: 0.800000; DAC0:    0; PID: 21.764999
+I (107109) main: ADC0: 0.800000; DAC0:    0; PID: 21.755001
+I (107739) main: ADC0: 0.848528; DAC0:    0; PID: 21.764999
+I (108379) main: ADC0: 0.663325; DAC0:    0; PID: 21.764999
+I (109009) main: ADC0: 0.774597; DAC0:    0; PID: 21.755001
+I (109649) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (110279) main: ADC0: 0.000000; DAC0:    0; PID: 21.764999
+I (110919) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (111549) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (112189) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (112829) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (113459) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (114099) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (114729) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (115369) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (115999) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (116639) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (117269) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (117909) main: ADC0: 0.632456; DAC0:    0; PID: 21.764999
+I (118549) main: ADC0: 0.721110; DAC0:    0; PID: 21.755001
+I (119179) main: ADC0: 0.346410; DAC0:    0; PID: 21.764999
+I (119819) main: ADC0: 0.748331; DAC0:    0; PID: 21.764999
+I (120449) main: ADC0: 0.848528; DAC0:    0; PID: 21.764999
+I (121089) main: ADC0: 0.800000; DAC0:    0; PID: 21.764999
+I (121719) main: ADC0: 0.600000; DAC0:    0; PID: 21.755001
+I (122359) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (122989) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (123629) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (124269) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (124899) main: ADC0: 0.663325; DAC0:    0; PID: 21.755001
+I (125539) main: ADC0: 0.600000; DAC0:    0; PID: 21.755001
+I (126169) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (126809) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (127439) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (128079) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (128709) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (129349) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (129989) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (130619) main: ADC0: 0.200000; DAC0:    0; PID: 21.764999
+I (131259) main: ADC0: 0.447214; DAC0:    0; PID: 21.755001
+I (131889) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (132529) main: ADC0: 0.400000; DAC0:    0; PID: 21.755001
+I (133159) main: ADC0: 0.565685; DAC0:    0; PID: 21.755001
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (29) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (29) boot: compile time Oct 30 2025 21:25:56
+I (29) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (37) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5bch ( 54716) map
+I (106) esp_image: segment 1: paddr=0001d5e4 vaddr=3ff80000 size=00020h (    32) load
+I (107) esp_image: segment 2: paddr=0001d60c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fd98 vaddr=40080000 size=00280h (   640) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22838h (141368) map
+I (174) esp_image: segment 5: paddr=00042860 vaddr=40080280 size=0f3f8h ( 62456) load
+I (206) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (225) cpu_start: Pro cpu start user code
+I (225) cpu_start: cpu freq: 160000000 Hz
+I (225) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  6359c7086...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (265) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (270) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (286) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (295) spi_flash: flash io: dio
+I (299) main_task: Started on CPU0
+I (309) main_task: Calling app_main()
+E (309) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (309) button: IoT Button Version: 4.1.4
+I (309) led_gpio: LED Indicator Version: 2.0.2
+I (319) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+E (369) storage: Error (ESP_ERR_NVS_NOT_FOUND) opening NVS handle!
+I (939) main: ADC0 offset: 1236.000032
+I (969) main: ADC0: 1236.000032; DAC0:   77; PID: 21.755001
+I (1599) main: ADC0: 0.600000; DAC0:    0; PID: 21.764999
+I (2239) main: ADC0: 0.600000; DAC0:    0; PID: 21.755001
+I (2869) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (3509) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (4149) main: ADC0: 0.346410; DAC0:    0; PID: 21.755001
+I (4779) main: ADC0: 0.282843; DAC0:    0; PID: 21.755001
+I (5419) main: ADC0: 0.000000; DAC0:    0; PID: 21.755001
+I (6049) main: ADC0: 0.200000; DAC0:    0; PID: 21.755001
+I (6689) main: ADC0: 0.529150; DAC0:    0; PID: 21.745001
+I (7319) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (7959) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (8589) main: ADC0: 0.848528; DAC0:    0; PID: 21.745001
+I (9229) main: ADC0: 0.979796; DAC0:    0; PID: 21.745001
+I (9869) main: ADC0: 0.959166; DAC0:    0; PID: 21.745001
+I (10499) main: ADC0: 1.113553; DAC0:    0; PID: 21.745001
+I (11139) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (11769) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (12409) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (13039) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (13679) main: ADC0: 1.039230; DAC0:    0; PID: 21.745001
+I (14309) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (14949) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (15589) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (16219) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (16859) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (17489) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (18129) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (18759) main: ADC0: 1.113553; DAC0:    0; PID: 21.745001
+I (19399) main: ADC0: 1.637071; DAC0:    0; PID: 21.735001
+I (20029) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (20669) main: ADC0: 1.969772; DAC0:    0; PID: 21.735001
+I (21309) main: ADC0: 2.000000; DAC0:    0; PID: 21.735001
+I (21939) main: ADC0: 2.049390; DAC0:    0; PID: 21.745001
+I (22579) main: ADC0: 1.000000; DAC0:    0; PID: 21.745001
+I (23209) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001
+I (23849) main: ADC0: 1.058301; DAC0:    0; PID: 21.745001

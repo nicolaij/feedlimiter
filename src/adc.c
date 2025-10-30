@@ -19,8 +19,8 @@
 
 #include "pid_ctrl.h"
 
-#define BLOCK_SIZE 200 * 2
-#define ADC_CHANNEL ADC_CHANNEL_0
+#define BLOCK_SIZE 400 * 2
+#define ADC_CHANNEL ADC_CHANNEL_7
 
 float dac0_k = 1.0 / 16.0;
 float dac1_k = 1.0 / 16.0;
@@ -42,7 +42,7 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 {
     BaseType_t mustYield = pdFALSE;
     // Notify that ADC continuous driver has done enough number of conversions
-    vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
+    // vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
 
     return (mustYield == pdTRUE);
 }
@@ -56,7 +56,7 @@ static void continuous_adc_init()
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 10000,
+        .sample_freq_hz = 20000,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -86,8 +86,6 @@ static void continuous_adc_init()
 
 void adc_task(void *arg)
 {
-    continuous_adc_init();
-
     esp_err_t ret;
     uint32_t ret_num = 0;
     uint8_t result[BLOCK_SIZE] = {0};
@@ -98,10 +96,14 @@ void adc_task(void *arg)
     int current_offset = 0;
     bool current_offset_set = false;
 
+#define OPERATE (500 / 20)
+    int operate_count = 0;
+    int operate_sum = 0;
+
     pid_ctrl_block_handle_t pid_handle;
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
                                   .init_param.kp = 0.01,
-                                  .init_param.ki = 0.01,
+                                  .init_param.ki = 0.5,
                                   .init_param.kd = 0,
                                   .init_param.max_integral = 128,
                                   .init_param.min_integral = -128,
@@ -152,30 +154,48 @@ void adc_task(void *arg)
         // обработка
         if (count > 0)
         {
-            if (!current_offset_set)
-            {
-                current_offset = sum / count;
-                current_offset_set = true;
-            }
 
             int avg = sum / count - current_offset;
 
+            if (operate_count++ < OPERATE)
+            {
+                operate_sum += avg * avg;
+                continue;
+            }
+
+            double avgo = sqrt((double)operate_sum / OPERATE);
+            operate_count = 0;
+            operate_sum = 0;
+
+            if (!current_offset_set)
+            {
+                current_offset = avgo;
+                current_offset_set = true;
+
+                ESP_LOGI("main", "ADC0 offset: %f", avgo);
+
+                continue;
+            }
+
+
+
             uint8_t dac0 = UINT8_MAX;
-            float d0 = avg * dac0_k;
+            float d0 = avgo * dac0_k;
             if ((int)d0 < UINT8_MAX)
             {
                 dac0 = (int)d0;
             }
+
             dac_oneshot_output_voltage(chan0_handle, dac0);
 
             uint8_t dac1 = UINT8_MAX;
             float ret_result = 0;
-            float input_error = setup * 4095 / 100.0 - avg;
+            float input_error = setup * 4095 / 100.0 - avgo;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             // dac_oneshot_output_voltage(chan1_handle, dac1);
 
-            ESP_LOGI("main", "ADC0: %4d; DAC0: %4d; PID: %4f", avg, dac0, ret_result);
+            ESP_LOGI("main", "ADC0: %4.1f; DAC0: %4d; PID: %4.3f", avgo, dac0, ret_result);
         }
     }
 }

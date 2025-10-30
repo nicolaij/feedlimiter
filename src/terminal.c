@@ -21,9 +21,8 @@ static led_indicator_handle_t led_handle_0 = NULL;
 
 menu_t menu[] = {
     {.id = "currset", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
-    {.id = "Kdispl", .name = "К масшт. значения тока на дисплей", .izm = "", .val = 1000, .min = 1, .max = 10000},
-    {.id = "Kcalc", .name = "К масшт. значения тока расчет", .izm = "", .val = 1000, .min = 1, .max = 10000},
-
+    {.id = "Kcalc", .name = "К масшт. значения тока измеренное", .izm = "", .val = 1000, .min = 0, .max = 100000},
+    {.id = "Kdispl", .name = "К масшт. значения тока на дисплей", .izm = "", .val = 1000, .min = 0, .max = 100000},
 };
 
 esp_err_t init_nvs()
@@ -348,87 +347,103 @@ void console_task(void *arg)
     }
 }
 
-void led_indicator_init()
+const blink_step_t test_blink_loop[] = {
+    {LED_BLINK_HOLD, LED_STATE_ON, 50},   // step1: turn on LED 50 ms
+    {LED_BLINK_HOLD, LED_STATE_OFF, 100}, // step2: turn off LED 100 ms
+    {LED_BLINK_LOOP, 0, 0},               // step3: loop from step1
+};
+
+const blink_step_t test_blink_loop2[] = {
+    {LED_BLINK_HOLD, LED_STATE_ON, 100}, // step1: turn on LED 50 ms
+    {LED_BLINK_HOLD, LED_STATE_OFF, 50}, // step2: turn off LED 100 ms
+    {LED_BLINK_LOOP, 0, 0},              // step3: loop from step1
+};
+
+const blink_step_t test_blink_one_time[] = {
+    {LED_BLINK_HOLD, LED_STATE_ON, 50},   // step1: turn on LED 50 ms
+    {LED_BLINK_HOLD, LED_STATE_OFF, 100}, // step2: turn off LED 100 ms
+    {LED_BLINK_HOLD, LED_STATE_ON, 150},  // step3: turn on LED 150 ms
+    {LED_BLINK_HOLD, LED_STATE_OFF, 100}, // step4: turn off LED 100 ms
+    {LED_BLINK_STOP, 0, 0},               // step5: stop blink (off)
+};
+
+typedef enum
 {
-    led_indicator_gpio_config_t led_indicator_gpio_config = {
-        .is_active_level_high = 1,
-        .gpio_num = LED_PIN, /**< num of GPIO */
-    };
+    BLINK_TEST_BLINK_ONE_TIME, /**< test_blink_one_time */
+    BLINK_TEST_BLINK_LOOP,     /**< test_blink_loop */
+    BLINK_TEST_BLINK_LOOP2,
+    BLINK_MAX, /**< INVALID type */
+} led_indicator_blink_type_t;
 
-    led_indicator_config_t config = {
-        .blink_lists = (void *)NULL,
-        .blink_list_num = 0,
-    };
+blink_step_t const *led_indicator_blink_lists[] = {
+    [BLINK_TEST_BLINK_ONE_TIME] = test_blink_one_time,
+    [BLINK_TEST_BLINK_LOOP] = test_blink_loop,
+    [BLINK_TEST_BLINK_LOOP2] = test_blink_loop2,
+    [BLINK_MAX] = NULL,
+};
 
-    esp_err_t ret = led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0);
-    TEST_ASSERT(ret == ESP_OK);
-    TEST_ASSERT_NOT_NULL(led_handle_0);
-}
-
-void led_indicator_gpio_mode_test_all()
-{
-    ESP_LOGI(TAG, "connecting.....");
-    esp_err_t ret = led_indicator_start(led_handle_0, BLINK_CONNECTING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_CONNECTING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "connected.....");
-    ret = led_indicator_start(led_handle_0, BLINK_CONNECTED);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_CONNECTED);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "reconnecting.....");
-    ret = led_indicator_start(led_handle_0, BLINK_RECONNECTING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_RECONNECTING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "updating.....");
-    ret = led_indicator_start(led_handle_0, BLINK_UPDATING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_UPDATING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "factory_reset.....");
-    ret = led_indicator_start(led_handle_0, BLINK_FACTORY_RESET);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_FACTORY_RESET);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "provisioning.....");
-    ret = led_indicator_start(led_handle_0, BLINK_PROVISIONING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_PROVISIONING);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "provisioned.....");
-    ret = led_indicator_start(led_handle_0, BLINK_PROVISIONED);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    ret = led_indicator_stop(led_handle_0, BLINK_PROVISIONED);
-    TEST_ASSERT(ret == ESP_OK);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI(TAG, "test all condition done.....");
-}
+int key_dir = 0;
+#define KEY_TIMEOUT (5 * 1000 / 20)
+int key_timeout = KEY_TIMEOUT;
+int setup_set[3] = {25, 10, 50};
+int setup_curr = 25;
+int setup_cntr = 0;
 
 static void button_event_cb(void *arg, void *data)
 {
-    iot_button_print_event((button_handle_t)arg);
+    // iot_button_print_event((button_handle_t)arg);
+    button_event_t event = iot_button_get_event((button_handle_t)arg);
+    switch (event)
+    {
+    case BUTTON_SINGLE_CLICK:
+        if (key_dir != 1)
+        {
+            key_dir = 1;
+            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
+        }
+        else
+        {
+            key_dir = -1;
+            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+        }
+
+        ESP_LOGI(TAG, "Set DIR; %d", key_dir);
+
+        key_timeout = KEY_TIMEOUT;
+        break;
+    case BUTTON_LONG_PRESS_START:
+        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 1));
+        break;
+    case BUTTON_LONG_PRESS_HOLD:
+        setup_cntr++;
+        key_timeout = KEY_TIMEOUT;
+        if (setup_cntr % 20 == 0)
+        {
+            setup_curr += key_dir;
+
+            ESP_LOGI(TAG, "Set; %d", setup_curr);
+        }
+        break;
+    case BUTTON_LONG_PRESS_UP:
+        key_timeout = KEY_TIMEOUT;
+        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
+
+        if (key_dir == 1)
+        {
+            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
+        }
+        if (key_dir == -1)
+        {
+            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 void btn_task(void *arg)
@@ -437,25 +452,53 @@ void btn_task(void *arg)
     // create gpio button
     const button_config_t btn_cfg = {0};
     const button_gpio_config_t btn_gpio_cfg = {
-        .gpio_num = 0,
+        .gpio_num = BTN_PIN,
         .active_level = 0,
     };
     button_handle_t btn;
     esp_err_t ret = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &btn);
     assert(ret == ESP_OK);
 
-    ret = iot_button_register_cb(btn, BUTTON_PRESS_DOWN, NULL, button_event_cb, NULL);
-    ret |= iot_button_register_cb(btn, BUTTON_PRESS_REPEAT, NULL, button_event_cb, NULL);
-
+    ret = iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, NULL, button_event_cb, NULL);
+    ret |= iot_button_register_cb(btn, BUTTON_DOUBLE_CLICK, NULL, button_event_cb, NULL);
+    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, NULL, button_event_cb, NULL);
+    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_HOLD, NULL, button_event_cb, NULL);
+    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_UP, NULL, button_event_cb, NULL);
     // 1 - режим настройки, 2 - изменение настройки
     int state = 0;
     int led_blink = 0;
 
-    led_indicator_init();
-    led_indicator_gpio_mode_test_all();
+    led_indicator_gpio_config_t led_indicator_gpio_config = {
+        .is_active_level_high = 1,
+        .gpio_num = LED_PIN, /**< num of GPIO */
+    };
+
+    led_indicator_config_t config = {
+        .blink_lists = led_indicator_blink_lists,
+        .blink_list_num = BLINK_MAX,
+    };
+
+    ESP_ERROR_CHECK(led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0));
+    assert(led_handle_0 != NULL);
+
+    init_nvs();
+    read_nvs_menu();
+
+    setup_curr = menu[0].val;
 
     while (1)
     {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        // timeout key mode
+        if (key_dir != 0)
+        {
+            if (key_timeout-- <= 0)
+            {
+                ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+                ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+                key_dir = 0;
+                set_menu_val_by_id("currset", setup_curr);
+            }
+        }
+        vTaskDelay(20 / portTICK_PERIOD_MS);
     }
 }

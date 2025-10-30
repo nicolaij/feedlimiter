@@ -1,0 +1,358 @@
+I (173) esp_image: segment 5: paddr=00042838 vaddr=40080270 size=0f408h ( 62472) load
+I (205) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (224) cpu_start: Pro cpu start user code
+I (224) cpu_start: cpu freq: 160000000 Hz
+I (224) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  11c239077...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (264) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (269) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (285) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (294) spi_flash: flash io: dio
+I (298) main_task: Started on CPU0
+I (308) main_task: Calling app_main()
+E (308) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (308) button: IoT Button Version: 4.1.4
+I (308) led_gpio: LED Indicator Version: 2.0.2
+I (318) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+Guru Meditation Error: Core  0 panic'ed (Cache error). 
+Cache disabled but cached memory region accessed
+
+Core  0 register dump:
+PC      : 0x400dbd74  PS      : 0x00060034  A0      : 0x80081323  A1      : 0x3ffb1300  
+A2      : 0x00000000  A3      : 0x3ffb2800  A4      : 0x800815c2  A5      : 0x3ffaf100  
+A6      : 0x3ffb03d4  A7      : 0x3ffb8ca8  A8      : 0x80081253  A9      : 0x00060e23  
+A10     : 0x3ffb8cac  A11     : 0x3ffba3fc  A12     : 0x3ffb1304  A13     : 0x3ffb1308  
+A14     : 0x00000003  A15     : 0x00060e23  SAR     : 0x00000004  EXCCAUSE: 0x00000007  
+EXCVADDR: 0x00000000  LBEG    : 0x00000000  LEND    : 0x00000000  LCOUNT  : 0x00000000  
+
+
+Backtrace: 0x400dbd71:0x3ffb1300 0x40081320:0x3ffb1340 0x40083b0d:0x3ffb1360 0x4008349a:0x3ffaf140 0x40081ad9:0x3ffaf160 0x40087b0d:0x3ffaf180
+
+
+
+
+ELF file SHA256: 11c239077
+
+Rebooting...
+ets Jun  8 2016 00:22:57
+
+rst:0x3 (SW_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (28) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (28) boot: compile time Oct 30 2025 21:25:56
+I (28) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (36) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5cch ( 54732) map
+I (106) esp_image: segment 1: paddr=0001d5f4 vaddr=3ff80000 size=00020h (    32) load
+I (106) esp_image: segment 2: paddr=0001d61c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fda8 vaddr=40080000 size=00270h (   624) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22810h (141328) map
+I (173) esp_image: segment 5: paddr=00042838 vaddr=40080270 size=0f408h ( 62472) load
+I (205) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (224) cpu_start: Pro cpu start user code
+I (224) cpu_start: cpu freq: 160000000 Hz
+I (224) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  11c239077...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (264) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (269) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (285) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (294) spi_flash: flash io: dio
+I (298) main_task: Started on CPU0
+I (308) main_task: Calling app_main()
+E (308) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (308) button: IoT Button Version: 4.1.4
+I (308) led_gpio: LED Indicator Version: 2.0.2
+I (318) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+Guru Meditation Error: Core  0 panic'ed (Cache error). 
+Cache disabled but cached memory region accessed
+
+Core  0 register dump:
+PC      : 0x400dbd74  PS      : 0x00060034  A0      : 0x80081323  A1      : 0x3ffb1300  
+A2      : 0x00000000  A3      : 0x3ffb2800  A4      : 0x800815c2  A5      : 0x3ffaf100  
+A6      : 0x3ffb03d4  A7      : 0x3ffb8ca8  A8      : 0x80081253  A9      : 0x00060e23  
+A10     : 0x3ffb8cac  A11     : 0x3ffba3fc  A12     : 0x3ffb1304  A13     : 0x3ffb1308  
+A14     : 0x00000003  A15     : 0x00060e23  SAR     : 0x00000004  EXCCAUSE: 0x00000007  
+EXCVADDR: 0x00000000  LBEG    : 0x00000000  LEND    : 0x00000000  LCOUNT  : 0x00000000  
+
+
+Backtrace: 0x400dbd71:0x3ffb1300 0x40081320:0x3ffb1340 0x40083b0d:0x3ffb1360 0x4008349a:0x3ffaf140 0x40081ad9:0x3ffaf160 0x40087b0d:0x3ffaf180
+
+
+
+
+ELF file SHA256: 11c239077
+
+Rebooting...
+ets Jun  8 2016 00:22:57
+
+rst:0x3 (SW_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (28) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (28) boot: compile time Oct 30 2025 21:25:56
+I (28) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (36) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5cch ( 54732) map
+I (106) esp_image: segment 1: paddr=0001d5f4 vaddr=3ff80000 size=00020h (    32) load
+I (106) esp_image: segment 2: paddr=0001d61c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fda8 vaddr=40080000 size=00270h (   624) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22810h (141328) map
+I (173) esp_image: segment 5: paddr=00042838 vaddr=40080270 size=0f408h ( 62472) load
+I (205) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (224) cpu_start: Pro cpu start user code
+I (224) cpu_start: cpu freq: 160000000 Hz
+I (224) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  11c239077...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (264) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (269) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (285) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (294) spi_flash: flash io: dio
+I (298) main_task: Started on CPU0
+I (308) main_task: Calling app_main()
+E (308) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (308) button: IoT Button Version: 4.1.4
+I (308) led_gpio: LED Indicator Version: 2.0.2
+I (318) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+Guru Meditation Error: Core  0 panic'ed (Cache error). 
+Cache disabled but cached memory region accessed
+
+Core  0 register dump:
+PC      : 0x400dbd74  PS      : 0x00060034  A0      : 0x80081323  A1      : 0x3ffb1300  
+A2      : 0x00000000  A3      : 0x3ffb2800  A4      : 0x800815c2  A5      : 0x3ffaf100  
+A6      : 0x3ffb03d4  A7      : 0x3ffb8ca8  A8      : 0x80081253  A9      : 0x00060e23  
+A10     : 0x3ffb8cac  A11     : 0x3ffba3fc  A12     : 0x3ffb1304  A13     : 0x3ffb1308  
+A14     : 0x00000003  A15     : 0x00060e23  SAR     : 0x00000004  EXCCAUSE: 0x00000007  
+EXCVADDR: 0x00000000  LBEG    : 0x00000000  LEND    : 0x00000000  LCOUNT  : 0x00000000  
+
+
+Backtrace: 0x400dbd71:0x3ffb1300 0x40081320:0x3ffb1340 0x40083b0d:0x3ffb1360 0x40083494:0x3ffaf140 0x40081ad9:0x3ffaf160 0x40087b0d:0x3ffaf180
+
+
+
+
+ELF file SHA256: 11c239077
+
+Rebooting...
+ets Jun  8 2016 00:22:57
+
+rst:0x3 (SW_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6380
+ho 0 tail 12 room 4
+load:0x40078000,len:15916
+load:0x40080400,len:3860
+entry 0x40080630
+I (28) boot: ESP-IDF 5.5.0 2nd stage bootloader
+I (28) boot: compile time Oct 30 2025 21:25:56
+I (28) boot: Multicore bootloader
+I (30) boot: chip revision: v1.0
+I (33) boot.esp32: SPI Speed      : 40MHz
+I (36) boot.esp32: SPI Mode       : DIO
+I (40) boot.esp32: SPI Flash Size : 4MB
+I (44) boot: Enabling RNG early entropy source...
+I (48) boot: Partition Table:
+I (51) boot: ## Label            Usage          Type ST Offset   Length
+I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (64) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (77) boot: End of partition table
+I (80) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=0d5cch ( 54732) map
+I (106) esp_image: segment 1: paddr=0001d5f4 vaddr=3ff80000 size=00020h (    32) load
+I (106) esp_image: segment 2: paddr=0001d61c vaddr=3ffb0000 size=02784h ( 10116) load
+I (114) esp_image: segment 3: paddr=0001fda8 vaddr=40080000 size=00270h (   624) load
+I (118) esp_image: segment 4: paddr=00020020 vaddr=400d0020 size=22810h (141328) map
+I (173) esp_image: segment 5: paddr=00042838 vaddr=40080270 size=0f408h ( 62472) load
+I (205) boot: Loaded app from partition at offset 0x10000
+I (206) boot: Disabling RNG early entropy source...
+I (216) cpu_start: Multicore app
+I (224) cpu_start: Pro cpu start user code
+I (224) cpu_start: cpu freq: 160000000 Hz
+I (224) app_init: Application information:
+I (225) app_init: Project name:     feedlimiter
+I (229) app_init: App version:      7373d29-dirty
+I (233) app_init: Compile time:     Oct 30 2025 21:25:44
+I (238) app_init: ELF file SHA256:  11c239077...
+I (243) app_init: ESP-IDF:          5.5.0
+I (246) efuse_init: Min chip rev:     v0.0
+I (250) efuse_init: Max chip rev:     v3.99 
+I (254) efuse_init: Chip rev:         v1.0
+I (258) heap_init: Initializing. RAM available for dynamic allocation:
+I (264) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (269) heap_init: At 3FFB3218 len 0002CDE8 (179 KiB): DRAM
+I (275) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (280) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (285) heap_init: At 4008F678 len 00010988 (66 KiB): IRAM
+I (292) spi_flash: detected chip: winbond
+I (294) spi_flash: flash io: dio
+I (298) main_task: Started on CPU0
+I (308) main_task: Calling app_main()
+E (308) gpio: gpio_pullup_en(78): GPIO number error (input-only pad has no internal PU)
+I (308) button: IoT Button Version: 4.1.4
+I (308) led_gpio: LED Indicator Version: 2.0.2
+I (318) led_gpio: Indicator create successfully. type:GPIO mode, hardware_data:0x3ffbb78c, blink_lists:custom
+E (368) storage: Error (ESP_ERR_NVS_NOT_FOUND) opening NVS handle!
+I (938) main: ADC0 offset: 1236.960016
+I (1578) main: ADC0:  1.4; DAC0:    0; PID: 21.741
+I (2208) main: ADC0:  1.3; DAC0:    0; PID: 21.742
+I (2848) main: ADC0:  1.1; DAC0:    0; PID: 21.744
+I (3488) main: ADC0:  1.2; DAC0:    0; PID: 21.743
+I (4118) main: ADC0:  1.1; DAC0:    0; PID: 21.744
+I (4758) main: ADC0:  1.2; DAC0:    0; PID: 21.743
+I (5388) main: ADC0:  1.4; DAC0:    0; PID: 21.741
+I (6028) main: ADC0:  1.1; DAC0:    0; PID: 21.744
+I (6658) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (7298) main: ADC0:  1.7; DAC0:    0; PID: 21.738
+I (7928) main: ADC0:  1.1; DAC0:    0; PID: 21.744
+I (8568) main: ADC0:  1.4; DAC0:    0; PID: 21.741
+I (9208) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (9838) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (10478) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (11108) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (11748) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (12378) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (13018) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (13648) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (14288) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (14928) main: ADC0:  1.7; DAC0:    0; PID: 21.738
+I (15558) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (16198) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (16828) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (17468) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (18098) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (18738) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (19368) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (20008) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (20648) main: ADC0:  1.7; DAC0:    0; PID: 21.738
+I (21278) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (21918) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (22548) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (23188) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (23818) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (24458) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (25088) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (25728) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (26368) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (26998) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (27638) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (28268) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (28908) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (29538) main: ADC0:  2.8; DAC0:    0; PID: 21.727
+I (30178) main: ADC0:  2.1; DAC0:    0; PID: 21.734
+I (30808) main: ADC0:  2.1; DAC0:    0; PID: 21.734
+I (31448) main: ADC0:  2.1; DAC0:    0; PID: 21.734
+I (32088) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (32718) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (33358) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (33988) main: ADC0:  2.3; DAC0:    0; PID: 21.732
+I (34628) main: ADC0:  2.6; DAC0:    0; PID: 21.729
+I (35258) main: ADC0:  2.1; DAC0:    0; PID: 21.734
+I (35898) main: ADC0:  2.4; DAC0:    0; PID: 21.731
+I (36528) main: ADC0:  2.5; DAC0:    0; PID: 21.730
+I (37168) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (37808) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (38438) main: ADC0:  2.2; DAC0:    0; PID: 21.733
+I (39078) main: ADC0:  2.4; DAC0:    0; PID: 21.731
+I (39708) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (40348) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (40978) main: ADC0:  2.1; DAC0:    0; PID: 21.734
+I (41618) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (42248) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (42888) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (43528) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (44158) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (44798) main: ADC0:  1.6; DAC0:    0; PID: 21.739
+I (45428) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (46068) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (46698) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (47338) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (47968) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (48608) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (49248) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (49878) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (50518) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (51148) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (51788) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (52418) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (53058) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (53688) main: ADC0:  1.1; DAC0:    0; PID: 21.744
+I (54328) main: ADC0:  1.6; DAC0:    0; PID: 21.739
+I (54968) main: ADC0:  1.7; DAC0:    0; PID: 21.738
+I (55598) main: ADC0:  1.9; DAC0:    0; PID: 21.736
+I (56238) main: ADC0:  1.8; DAC0:    0; PID: 21.737
+I (56868) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (57508) main: ADC0:  2.0; DAC0:    0; PID: 21.735
+I (58138) main: ADC0:  2.0; DAC0:    0; PID: 21.735
