@@ -1,0 +1,401 @@
+#include "main.h"
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
+#include <stdio.h>
+#include <string.h>
+#include "esp_event.h"
+#include "driver/gpio.h"
+#include "button_gpio.h"
+#include "iot_button.h"
+
+#include "nvs.h"
+#include "nvs_flash.h"
+
+#include "esp_now.h"
+#include "esp_mac.h"
+
+#include <arpa/inet.h>
+#include "esp_netif.h"
+#include "esp_wifi.h"
+
+static const char *TAG = "terminal";
+
+nvs_handle_t my_handle;
+
+menu_t menu[] = {
+    {.id = "currset", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
+    {.id = "Kdispl", .name = "К масшт. значения тока на дисплей", .izm = "", .val = 1000, .min = 1, .max = 10000},
+    {.id = "Kcalc", .name = "К масшт. значения тока расчет", .izm = "", .val = 1000, .min = 1, .max = 10000},
+
+};
+
+esp_err_t init_nvs()
+{
+    // Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+
+    // Example of nvs_get_stats() to get the number of used entries and free entries:
+    nvs_stats_t nvs_stats;
+    nvs_get_stats(NULL, &nvs_stats);
+    ESP_LOGD("NVS", "Count: UsedEntries = (%d), FreeEntries = (%d), AllEntries = (%d)", nvs_stats.used_entries, nvs_stats.free_entries, nvs_stats.total_entries);
+    return err;
+}
+
+esp_err_t read_nvs_menu()
+{
+    // Open
+    esp_err_t erro = nvs_open("storage", NVS_READONLY, &my_handle);
+    if (erro != ESP_OK)
+    {
+        ESP_LOGE("storage", "Error (%s) opening NVS handle!", esp_err_to_name(erro));
+    }
+    else
+    {
+        for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+        {
+            esp_err_t err = nvs_get_i32(my_handle, menu[i].id, (int32_t *)&menu[i].val);
+            switch (err)
+            {
+            case ESP_OK:
+                ESP_LOGD("NVS", "Read \"%s\" = %i", menu[i].name, menu[i].val);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", menu[i].name);
+                break;
+            default:
+                ESP_LOGE("NVS", "Error (%s) reading!", esp_err_to_name(err));
+            }
+        }
+
+        // Close
+        nvs_close(my_handle);
+    }
+    return erro;
+}
+
+esp_err_t read_nvs_id(const char *key, uint64_t *out_value)
+{
+    // Open
+    esp_err_t err = nvs_open("storage", NVS_READONLY, &my_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE("storage", "Error (%s) opening NVS handle!", esp_err_to_name(err));
+    }
+    else
+    {
+        err = nvs_get_u64(my_handle, key, out_value);
+        switch (err)
+        {
+        case ESP_OK:
+            ESP_LOGD("NVS", "Read \"%s\" = %016llX", key, *out_value);
+            break;
+        case ESP_ERR_NVS_NOT_FOUND:
+            ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", key);
+            break;
+        default:
+            ESP_LOGE("NVS", "Error (%s) reading!", esp_err_to_name(err));
+        }
+
+        // Close
+        nvs_close(my_handle);
+    }
+    return err;
+}
+
+int get_menu_pos_by_id(const char *id)
+{
+    int ll = strlen(id);
+    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    {
+        int l = strlen(menu[i].id);
+        if (ll == l && strncmp(id, menu[i].id, l) == 0)
+            return i;
+    }
+    return -1;
+}
+
+int get_menu_val_by_id(const char *id)
+{
+    int ll = strlen(id);
+    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    {
+        int l = strlen(menu[i].id);
+        if (ll == l && strncmp(id, menu[i].id, l) == 0)
+            return menu[i].val;
+    }
+    return 0;
+}
+
+esp_err_t set_menu_val_by_id(const char *id, int value)
+{
+    esp_err_t err = ESP_FAIL;
+    int ll = strlen(id);
+    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    {
+        int l = strlen(menu[i].id);
+        if (ll == l && strncmp(id, menu[i].id, l) == 0)
+        {
+            if (menu[i].val != value)
+            {
+                err = nvs_open("storage", NVS_READWRITE, &my_handle);
+
+                ESP_LOGD("NVS", "Write  \"%s\" : \"%i\"", menu[i].id, value);
+                err = nvs_set_i32(my_handle, id, value);
+                menu[i].val = value;
+                nvs_close(my_handle);
+            }
+            break;
+        }
+    }
+
+    return err;
+}
+
+int get_menu_json(char *buf)
+{
+    int pos = 0;
+    buf[pos++] = '{';
+    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    {
+        pos += sprintf(&buf[pos], "\"%s\":[\"%s\",%i,\"%s\"]", menu[i].id, menu[i].name, menu[i].val, menu[i].izm);
+        if (i < sizeof(menu) / sizeof(menu_t) - 1)
+            buf[pos++] = ',';
+        else
+            buf[pos++] = '}';
+
+        buf[pos] = '\0';
+    }
+    return pos;
+}
+
+int get_menu_html(char *buf)
+{
+    int pos = 0;
+    static int index = 0;
+
+    if (index == 0)
+        pos = sprintf(buf, "<table>");
+
+    while (index < sizeof(menu) / sizeof(menu_t))
+    {
+        if (pos > CONFIG_LWIP_TCP_MSS - 256)
+        {
+            return pos;
+        }
+
+        if (index == 4) // IP
+        {
+            esp_ip4_addr_t ip_addr;
+            ip_addr.addr = (unsigned int)menu[index].val;
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" IPSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, IP2STR(&ip_addr));
+        }
+        else if (index == 7) // MAC
+        {
+            uint8_t mac_addr[6];
+            mac_addr[0] = (menu[index].val >> 16) & 0xFF;
+            mac_addr[1] = (menu[index].val >> 8) & 0xFF;
+            mac_addr[2] = (menu[index].val >> 0) & 0xFF;
+            mac_addr[3] = (menu[index + 1].val >> 16) & 0xFF;
+            mac_addr[4] = (menu[index + 1].val >> 8) & 0xFF;
+            mac_addr[5] = (menu[index + 1].val >> 0) & 0xFF;
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, MAC2STR(mac_addr));
+        }
+        else if (strlen(menu[index].name) > 0)
+        {
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%d\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
+        }
+        else // hidden
+        {
+            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%d\">", menu[index].id, menu[index].id, menu[index].val);
+        }
+
+        index++;
+    }
+
+    if (pos > 0)
+    {
+        pos += sprintf(&buf[pos], "</table><br>");
+    }
+    else
+    {
+        index = 0;
+    }
+
+    return pos;
+}
+
+void console_task(void *arg)
+{
+    uint8_t serialbuffer[256];
+
+    int selected_menu_id = 0;
+
+    char *data = (char *)serialbuffer;
+    int pos = 0;
+
+    while (1)
+    {
+        const int c = getc(stdin);
+        if (c > 0) // EOF = -1
+        {
+            if (c == '\n')
+            {
+                data[pos] = 0;
+
+                const int nc = getc(stdin); // remove CRLF
+                if (nc != '\n' && nc != '\r')
+                    ungetc(nc, stdin);
+            }
+            else
+            {
+                if (pos < sizeof(serialbuffer))
+                    data[pos++] = c;
+            }
+        }
+        else
+        {
+            vTaskDelay(50 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        if (c == '\n')
+        {
+            // ESP_LOG_BUFFER_HEXDUMP(TAG, data, pos + 1, ESP_LOG_INFO);
+            // ESP_LOGD(TAG, "Read bytes: '%s'", data);
+            int n = atoi((const char *)data);
+            switch (selected_menu_id)
+            {
+            case 0:
+                switch (n)
+                {
+                case 0: // Выводим меню
+                    ESP_LOGI("menu", "-------------------------------------------");
+                    int i = 0;
+                    for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+                    {
+                        if (strlen(menu[i].name) > 0)
+                            ESP_LOGI("menu", "%2i. %s: %i %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
+                    }
+
+                    ESP_LOGI("menu", "54. FreeRTOS INFO");
+                    ESP_LOGI("menu", "55. Reboot");
+                    ESP_LOGI("menu", "-------------------------------------------");
+                    break;
+                case 54: // FreeRTOS INFO
+                    ESP_LOGI("info", "Minimum free memory: %lu bytes", esp_get_minimum_free_heap_size());
+                    // ESP_LOGI("wifi_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleWifi));
+                    // ESP_LOGI("adc_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleADC));
+                    /// ESP_LOGI("modem_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleNB));
+                    // ESP_LOGI("console_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleConsole));
+                    /*
+                                        char statsbuf[600];
+                                        vTaskGetRunTimeStats(statsbuf);
+                                        printf(statsbuf);
+                    */
+                    break;
+                case 55: // Reboot
+                    vTaskDelay(500 / portTICK_PERIOD_MS);
+                    esp_restart();
+                    break;
+                default:
+                    if (n > 0 && n <= sizeof(menu) / sizeof(menu_t))
+                    {
+                        ESP_LOGI("menu", "-------------------------------------------");
+                        ESP_LOGI("menu", "%2i. %s: %i %s. Введите новое значение: ", n, menu[n - 1].name, menu[n - 1].val, menu[n - 1].izm);
+                        ESP_LOGI("menu", "-------------------------------------------");
+                    }
+                    else
+                    {
+                        ESP_LOGE("menu", "Err: %i", n);
+                    }
+                    break;
+                }
+                break;
+
+            default:
+                if (selected_menu_id > 0 && selected_menu_id <= sizeof(menu) / sizeof(menu_t)) // selected_menu_id - номер пункта меню, n - value
+                {
+                    if (n >= menu[selected_menu_id - 1].min && n <= menu[selected_menu_id - 1].max)
+                    {
+                        menu[selected_menu_id - 1].val = n;
+                        esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+                        if (err != ESP_OK)
+                        {
+                            ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
+                        }
+                        else
+                        {
+                            err = nvs_set_i32(my_handle, menu[selected_menu_id - 1].id, menu[selected_menu_id - 1].val);
+                            if (err != ESP_OK)
+                            {
+                                ESP_LOGE(TAG, "%s", esp_err_to_name(err));
+                            }
+                            else
+                            {
+                                ESP_LOGI("menu", "-------------------------------------------");
+                                ESP_LOGI("menu", "%2i. %s: %i %s.", selected_menu_id, menu[selected_menu_id - 1].name, menu[selected_menu_id - 1].val, menu[selected_menu_id - 1].izm);
+                                ESP_LOGI("menu", "-------------------------------------------");
+                            }
+                        }
+
+                        ESP_LOGD(TAG, "Committing updates in NVS ... ");
+                        err = nvs_commit(my_handle);
+                        if (err != ESP_OK)
+                            ESP_LOGE(TAG, "Committing updates in NVS ... - Failed!");
+
+                        // Close
+                        nvs_close(my_handle);
+                    }
+                }
+                break;
+            }
+
+            if ((selected_menu_id == 0 && n > 0) && (n < sizeof(menu) / sizeof(menu_t)))
+                selected_menu_id = n;
+            else
+                selected_menu_id = 0;
+
+            pos = 0;
+        } // if (c == '\n')
+        vTaskDelay(1);
+    }
+}
+
+static void button_event_cb(void *arg, void *data)
+{
+    iot_button_print_event((button_handle_t)arg);
+}
+
+void btn_task(void *arg)
+{
+
+    // create gpio button
+    const button_config_t btn_cfg = {0};
+    const button_gpio_config_t btn_gpio_cfg = {
+        .gpio_num = 0,
+        .active_level = 0,
+    };
+    button_handle_t btn;
+    esp_err_t ret = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &btn);
+    assert(ret == ESP_OK);
+
+    ret = iot_button_register_cb(btn, BUTTON_PRESS_DOWN, NULL, button_event_cb, NULL);
+    ret |= iot_button_register_cb(btn, BUTTON_PRESS_REPEAT, NULL, button_event_cb, NULL);
+
+    // 1 - режим настройки, 2 - изменение настройки
+    int state = 0;
+    int led_blink = 0;
+
+    while (1)
+    {
+
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+}
