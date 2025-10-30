@@ -19,7 +19,7 @@
 
 #include "pid_ctrl.h"
 
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 200 * 2
 #define ADC_CHANNEL ADC_CHANNEL_0
 
 float dac0_k = 1.0 / 16.0;
@@ -33,7 +33,6 @@ dac_oneshot_handle_t chan0_handle;
 dac_oneshot_handle_t chan1_handle;
 
 static const char *TAG = "adc";
-
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -51,13 +50,13 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 static void continuous_adc_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
-        .max_store_buf_size = 1024,
+        .max_store_buf_size = BLOCK_SIZE * 2,
         .conv_frame_size = BLOCK_SIZE,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 1000,
+        .sample_freq_hz = 10000,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -85,7 +84,6 @@ static void continuous_adc_init()
     ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan1_cfg, &chan1_handle));
 }
 
-
 void adc_task(void *arg)
 {
     continuous_adc_init();
@@ -96,6 +94,9 @@ void adc_task(void *arg)
     int median_filter[3];
     uint8_t median_filter_fill = 0;
     int digital_filter;
+
+    int current_offset = 0;
+    bool current_offset_set = false;
 
     pid_ctrl_block_handle_t pid_handle;
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
@@ -151,7 +152,13 @@ void adc_task(void *arg)
         // обработка
         if (count > 0)
         {
-            int avg = sum / count;
+            if (!current_offset_set)
+            {
+                current_offset = sum / count;
+                current_offset_set = true;
+            }
+
+            int avg = sum / count - current_offset;
 
             uint8_t dac0 = UINT8_MAX;
             float d0 = avg * dac0_k;
@@ -171,5 +178,4 @@ void adc_task(void *arg)
             ESP_LOGI("main", "ADC0: %4d; DAC0: %4d; PID: %4f", avg, dac0, ret_result);
         }
     }
-
 }

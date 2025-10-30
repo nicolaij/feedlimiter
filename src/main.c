@@ -6,10 +6,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+
+#include <main.h>
+
 static const char *TAG = "FLIM";
 
 void app_main()
 {
+
+    xTaskCreate(btn_task, "btn_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
 
     while (1)
     {

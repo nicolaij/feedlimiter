@@ -11,16 +11,13 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "esp_now.h"
-#include "esp_mac.h"
-
-#include <arpa/inet.h>
-#include "esp_netif.h"
-#include "esp_wifi.h"
+#include "led_indicator_gpio.h"
 
 static const char *TAG = "terminal";
 
 nvs_handle_t my_handle;
+
+static led_indicator_handle_t led_handle_0 = NULL;
 
 menu_t menu[] = {
     {.id = "currset", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
@@ -190,24 +187,7 @@ int get_menu_html(char *buf)
             return pos;
         }
 
-        if (index == 4) // IP
-        {
-            esp_ip4_addr_t ip_addr;
-            ip_addr.addr = (unsigned int)menu[index].val;
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" IPSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, IP2STR(&ip_addr));
-        }
-        else if (index == 7) // MAC
-        {
-            uint8_t mac_addr[6];
-            mac_addr[0] = (menu[index].val >> 16) & 0xFF;
-            mac_addr[1] = (menu[index].val >> 8) & 0xFF;
-            mac_addr[2] = (menu[index].val >> 0) & 0xFF;
-            mac_addr[3] = (menu[index + 1].val >> 16) & 0xFF;
-            mac_addr[4] = (menu[index + 1].val >> 8) & 0xFF;
-            mac_addr[5] = (menu[index + 1].val >> 0) & 0xFF;
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, MAC2STR(mac_addr));
-        }
-        else if (strlen(menu[index].name) > 0)
+        if (strlen(menu[index].name) > 0)
         {
             pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%d\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
         }
@@ -242,14 +222,14 @@ void console_task(void *arg)
 
     while (1)
     {
-        const int c = getc(stdin);
+        const int c = fgetc(stdin);
         if (c > 0) // EOF = -1
         {
             if (c == '\n')
             {
                 data[pos] = 0;
 
-                const int nc = getc(stdin); // remove CRLF
+                const int nc = fgetc(stdin); // remove CRLF
                 if (nc != '\n' && nc != '\r')
                     ungetc(nc, stdin);
             }
@@ -368,6 +348,84 @@ void console_task(void *arg)
     }
 }
 
+void led_indicator_init()
+{
+    led_indicator_gpio_config_t led_indicator_gpio_config = {
+        .is_active_level_high = 1,
+        .gpio_num = LED_PIN, /**< num of GPIO */
+    };
+
+    led_indicator_config_t config = {
+        .blink_lists = (void *)NULL,
+        .blink_list_num = 0,
+    };
+
+    esp_err_t ret = led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0);
+    TEST_ASSERT(ret == ESP_OK);
+    TEST_ASSERT_NOT_NULL(led_handle_0);
+}
+
+void led_indicator_gpio_mode_test_all()
+{
+    ESP_LOGI(TAG, "connecting.....");
+    esp_err_t ret = led_indicator_start(led_handle_0, BLINK_CONNECTING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_CONNECTING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "connected.....");
+    ret = led_indicator_start(led_handle_0, BLINK_CONNECTED);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_CONNECTED);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "reconnecting.....");
+    ret = led_indicator_start(led_handle_0, BLINK_RECONNECTING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_RECONNECTING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "updating.....");
+    ret = led_indicator_start(led_handle_0, BLINK_UPDATING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_UPDATING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "factory_reset.....");
+    ret = led_indicator_start(led_handle_0, BLINK_FACTORY_RESET);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_FACTORY_RESET);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "provisioning.....");
+    ret = led_indicator_start(led_handle_0, BLINK_PROVISIONING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_PROVISIONING);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "provisioned.....");
+    ret = led_indicator_start(led_handle_0, BLINK_PROVISIONED);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    ret = led_indicator_stop(led_handle_0, BLINK_PROVISIONED);
+    TEST_ASSERT(ret == ESP_OK);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "test all condition done.....");
+}
+
 static void button_event_cb(void *arg, void *data)
 {
     iot_button_print_event((button_handle_t)arg);
@@ -393,9 +451,11 @@ void btn_task(void *arg)
     int state = 0;
     int led_blink = 0;
 
+    led_indicator_init();
+    led_indicator_gpio_mode_test_all();
+
     while (1)
     {
-
         vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }
