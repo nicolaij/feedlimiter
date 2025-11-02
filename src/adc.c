@@ -20,11 +20,9 @@
 #include "pid_ctrl.h"
 
 #define BLOCK_SIZE 400 * 2
-#define ADC_CHANNEL ADC_CHANNEL_7
 
-float dac0_k = 1.0 / 16.0;
-float dac1_k = 1.0 / 16.0;
-float setup = 50.0;
+extern float setup_current;
+extern int setup_current_changed;
 
 static TaskHandle_t s_task_handle;
 
@@ -96,17 +94,23 @@ void adc_task(void *arg)
     int current_offset = 0;
     bool current_offset_set = false;
 
-#define OPERATE (500 / 20)
+#define OPERATE (500 / 20) // 500ms
+
     int operate_count = 0;
     int operate_sum = 0;
 
+    vTaskDelay(1);
+
+    int k_calc = get_menu_val_by_id("Kcalc");
+    int k_displ = get_menu_val_by_id("Kdispl");
+
     pid_ctrl_block_handle_t pid_handle;
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                  .init_param.kp = 0.01,
-                                  .init_param.ki = 0.5,
+                                  .init_param.kp = 0.1,
+                                  .init_param.ki = 1,
                                   .init_param.kd = 0,
-                                  .init_param.max_integral = 128,
-                                  .init_param.min_integral = -128,
+                                  .init_param.max_integral = 255,
+                                  .init_param.min_integral = -255,
                                   .init_param.max_output = 255,
                                   .init_param.min_output = 0};
 
@@ -117,6 +121,7 @@ void adc_task(void *arg)
     adc_continuous_evt_cbs_t cbs = {
         .on_conv_done = s_conv_done_cb,
     };
+
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
@@ -163,7 +168,7 @@ void adc_task(void *arg)
                 continue;
             }
 
-            double avgo = sqrt((double)operate_sum / OPERATE);
+            float avgo = sqrtf((float)operate_sum / OPERATE);
             operate_count = 0;
             operate_sum = 0;
 
@@ -177,10 +182,18 @@ void adc_task(void *arg)
                 continue;
             }
 
-
+            float current = avgo * k_calc / 10000.0f; // in A
+            //ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
 
             uint8_t dac0 = UINT8_MAX;
-            float d0 = avgo * dac0_k;
+
+            float d0 = 0;
+
+            if (setup_current_changed != 0)
+                d0 = setup_current_changed * k_displ / 10000.0f;
+            else
+                d0 = current * k_displ / 10000.0f;
+
             if ((int)d0 < UINT8_MAX)
             {
                 dac0 = (int)d0;
@@ -189,13 +202,17 @@ void adc_task(void *arg)
             dac_oneshot_output_voltage(chan0_handle, dac0);
 
             uint8_t dac1 = UINT8_MAX;
-            float ret_result = 0;
-            float input_error = setup * 4095 / 100.0 - avgo;
+            static float ret_result = 0;
+            float input_error = setup_current - current;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
+            if ((int)ret_result < UINT8_MAX)
+            {
+                dac1 = (int)ret_result;
+            }
 
-            // dac_oneshot_output_voltage(chan1_handle, dac1);
+            dac_oneshot_output_voltage(chan1_handle, dac1);
 
-            ESP_LOGI("main", "ADC0: %4.1f; DAC0: %4d; PID: %4.3f", avgo, dac0, ret_result);
+            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); DAC0: %4d; PID: %4.3f", current, avgo , dac0, ret_result);
         }
     }
 }

@@ -15,8 +15,9 @@
 #include <sys/time.h>
 #include "esp_sleep.h"
 
-#define LED_PIN GPIO_NUM_19
-#define BTN_PIN GPIO_NUM_39
+#define LED_PIN GPIO_NUM_2
+#define BTN_PIN GPIO_NUM_0
+#define ADC_CHANNEL ADC_CHANNEL_5
 
 typedef struct
 {
@@ -27,6 +28,12 @@ typedef struct
     const int min;
     const int max;
 } menu_t;
+
+esp_err_t init_nvs();
+esp_err_t read_nvs_menu();
+
+int get_menu_val_by_id(const char *id);
+esp_err_t set_menu_val_by_id(const char *id, int value);
 
 void btn_task(void *arg);
 void console_task(void *arg);

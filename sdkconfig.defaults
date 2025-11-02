@@ -1,0 +1,18 @@
+# Reduce bootloader log verbosity
+CONFIG_LOG_BOOTLOADER_LEVEL_INFO=y
+CONFIG_LOG_BOOTLOADER_LEVEL=3
+
+
+#2.9v
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_4=y
+
+# Enable FreeRTOS stats formatting functions, needed for 'tasks' command
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+
+# On chips with USB serial, disable secondary console which does not make sense when using console component
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+CONFIG_LOG_COLORS=y
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+

@@ -19,10 +19,13 @@ nvs_handle_t my_handle;
 
 static led_indicator_handle_t led_handle_0 = NULL;
 
+float setup_current = 25.0;
+int setup_current_changed = 0;
+
 menu_t menu[] = {
-    {.id = "currset", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
-    {.id = "Kcalc", .name = "К масшт. значения тока измеренное", .izm = "", .val = 1000, .min = 0, .max = 100000},
-    {.id = "Kdispl", .name = "К масшт. значения тока на дисплей", .izm = "", .val = 1000, .min = 0, .max = 100000},
+    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "*1/10000", .val = 200, .min = 1, .max = INT32_MAX},
+    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "*1/10000", .val = 50000, .min = 1, .max = INT32_MAX},
 };
 
 esp_err_t init_nvs()
@@ -481,22 +484,25 @@ void btn_task(void *arg)
     ESP_ERROR_CHECK(led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0));
     assert(led_handle_0 != NULL);
 
-    init_nvs();
-    read_nvs_menu();
-
     setup_curr = menu[0].val;
+    setup_current = setup_curr;
 
     while (1)
     {
         // timeout key mode
         if (key_dir != 0)
         {
+            setup_current_changed = setup_curr;
             if (key_timeout-- <= 0)
             {
                 ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
                 ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+                ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
+
                 key_dir = 0;
-                set_menu_val_by_id("currset", setup_curr);
+                set_menu_val_by_id("elcurrent", setup_curr);
+                setup_current = setup_curr;
+                setup_current_changed = 0;
             }
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);

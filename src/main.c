@@ -13,6 +13,10 @@ static const char *TAG = "FLIM";
 
 void app_main()
 {
+
+    init_nvs();
+    read_nvs_menu();
+    
     xTaskCreate(adc_task, "adc_task", 1024 * 8, NULL, configMAX_PRIORITIES - 10, NULL);
     xTaskCreate(btn_task, "btn_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
     xTaskCreate(console_task, "console_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
