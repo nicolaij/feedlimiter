@@ -106,13 +106,13 @@ void adc_task(void *arg)
 
     pid_ctrl_block_handle_t pid_handle;
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                  .init_param.kp = 0.1,
-                                  .init_param.ki = 1,
-                                  .init_param.kd = 0,
+                                  .init_param.kp = (float)get_menu_val_by_id("pidP") / 10000.0f,
+                                  .init_param.ki = (float)get_menu_val_by_id("pidI") / 10000.0f,
+                                  .init_param.kd = (float)get_menu_val_by_id("pidD") / 10000.0f,
                                   .init_param.max_integral = 255,
                                   .init_param.min_integral = -255,
-                                  .init_param.max_output = 255,
-                                  .init_param.min_output = 0};
+                                  .init_param.max_output = get_menu_val_by_id("pidMax"),
+                                  .init_param.min_output = get_menu_val_by_id("pidMin")};
 
     continuous_adc_init();
 

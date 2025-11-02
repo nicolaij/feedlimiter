@@ -26,6 +26,11 @@ menu_t menu[] = {
     {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
     {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "*1/10000", .val = 200, .min = 1, .max = INT32_MAX},
     {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "*1/10000", .val = 50000, .min = 1, .max = INT32_MAX},
+    {.id = "pidP", .name = "PID P", .izm = "*1/10000", .val = 1000, .min = 1, .max = INT32_MAX},
+    {.id = "pidI", .name = "PID I", .izm = "*1/10000", .val = 10000, .min = 0, .max = INT32_MAX},
+    {.id = "pidD", .name = "PID D", .izm = "*1/10000", .val = 0, .min = 0, .max = INT32_MAX},
+    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = INT32_MAX},
+    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = INT32_MAX},
 };
 
 esp_err_t init_nvs()
