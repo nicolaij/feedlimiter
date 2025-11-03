@@ -24,16 +24,16 @@ typedef struct
     const char id[10];
     const char name[64];
     const char izm[8];
-    int val;
-    const int min;
-    const int max;
+    float val;
+    const float min;
+    const float max;
 } menu_t;
 
 esp_err_t init_nvs();
 esp_err_t read_nvs_menu();
 
-int get_menu_val_by_id(const char *id);
-esp_err_t set_menu_val_by_id(const char *id, int value);
+float get_menu_val_by_id(const char *id);
+esp_err_t set_menu_val_by_id(const char *id, float value);
 
 void btn_task(void *arg);
 void console_task(void *arg);

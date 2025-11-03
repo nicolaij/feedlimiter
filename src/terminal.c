@@ -23,14 +23,14 @@ float setup_current = 25.0;
 int setup_current_changed = 0;
 
 menu_t menu[] = {
-    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25, .min = 5, .max = 99},
-    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "*1/10000", .val = 200, .min = 1, .max = INT32_MAX},
-    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "*1/10000", .val = 50000, .min = 1, .max = INT32_MAX},
-    {.id = "pidP", .name = "PID P", .izm = "*1/10000", .val = 1000, .min = 1, .max = INT32_MAX},
-    {.id = "pidI", .name = "PID I", .izm = "*1/10000", .val = 10000, .min = 0, .max = INT32_MAX},
-    {.id = "pidD", .name = "PID D", .izm = "*1/10000", .val = 0, .min = 0, .max = INT32_MAX},
-    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = INT32_MAX},
-    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = INT32_MAX},
+    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 5, .max = 99},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.1333333, .min = 0, .max = 99999},
+    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 99999},
+    {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 1, .max = 99999},
+    {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 99999},
+    {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 99999},
+    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 99999},
+    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 99999},
 };
 
 esp_err_t init_nvs()
@@ -64,11 +64,12 @@ esp_err_t read_nvs_menu()
     {
         for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
         {
-            esp_err_t err = nvs_get_i32(my_handle, menu[i].id, (int32_t *)&menu[i].val);
+            size_t s = sizeof(float);
+            esp_err_t err = nvs_get_blob(my_handle, menu[i].id, &menu[i].val, &s);
             switch (err)
             {
             case ESP_OK:
-                ESP_LOGD("NVS", "Read \"%s\" = %i", menu[i].name, menu[i].val);
+                ESP_LOGD("NVS", "Read \"%s\" = %f", menu[i].name, menu[i].val);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
                 ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", menu[i].name);
@@ -84,35 +85,6 @@ esp_err_t read_nvs_menu()
     return erro;
 }
 
-esp_err_t read_nvs_id(const char *key, uint64_t *out_value)
-{
-    // Open
-    esp_err_t err = nvs_open("storage", NVS_READONLY, &my_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE("storage", "Error (%s) opening NVS handle!", esp_err_to_name(err));
-    }
-    else
-    {
-        err = nvs_get_u64(my_handle, key, out_value);
-        switch (err)
-        {
-        case ESP_OK:
-            ESP_LOGD("NVS", "Read \"%s\" = %016llX", key, *out_value);
-            break;
-        case ESP_ERR_NVS_NOT_FOUND:
-            ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", key);
-            break;
-        default:
-            ESP_LOGE("NVS", "Error (%s) reading!", esp_err_to_name(err));
-        }
-
-        // Close
-        nvs_close(my_handle);
-    }
-    return err;
-}
-
 int get_menu_pos_by_id(const char *id)
 {
     int ll = strlen(id);
@@ -125,7 +97,7 @@ int get_menu_pos_by_id(const char *id)
     return -1;
 }
 
-int get_menu_val_by_id(const char *id)
+float get_menu_val_by_id(const char *id)
 {
     int ll = strlen(id);
     for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
@@ -137,7 +109,7 @@ int get_menu_val_by_id(const char *id)
     return 0;
 }
 
-esp_err_t set_menu_val_by_id(const char *id, int value)
+esp_err_t set_menu_val_by_id(const char *id, float value)
 {
     esp_err_t err = ESP_FAIL;
     int ll = strlen(id);
@@ -149,9 +121,8 @@ esp_err_t set_menu_val_by_id(const char *id, int value)
             if (menu[i].val != value)
             {
                 err = nvs_open("storage", NVS_READWRITE, &my_handle);
-
-                ESP_LOGD("NVS", "Write  \"%s\" : \"%i\"", menu[i].id, value);
-                err = nvs_set_i32(my_handle, id, value);
+                ESP_LOGD("NVS", "Write  \"%s\" : \"%f\"", menu[i].id, value);
+                err = nvs_set_blob(my_handle, id, &value, sizeof(float));
                 menu[i].val = value;
                 nvs_close(my_handle);
             }
@@ -168,7 +139,7 @@ int get_menu_json(char *buf)
     buf[pos++] = '{';
     for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
     {
-        pos += sprintf(&buf[pos], "\"%s\":[\"%s\",%i,\"%s\"]", menu[i].id, menu[i].name, menu[i].val, menu[i].izm);
+        pos += sprintf(&buf[pos], "\"%s\":[\"%s\",%f,\"%s\"]", menu[i].id, menu[i].name, menu[i].val, menu[i].izm);
         if (i < sizeof(menu) / sizeof(menu_t) - 1)
             buf[pos++] = ',';
         else
@@ -196,11 +167,11 @@ int get_menu_html(char *buf)
 
         if (strlen(menu[index].name) > 0)
         {
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%d\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%f\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
         }
         else // hidden
         {
-            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%d\">", menu[index].id, menu[index].id, menu[index].val);
+            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%f\">", menu[index].id, menu[index].id, menu[index].val);
         }
 
         index++;
@@ -256,11 +227,11 @@ void console_task(void *arg)
         {
             // ESP_LOG_BUFFER_HEXDUMP(TAG, data, pos + 1, ESP_LOG_INFO);
             // ESP_LOGD(TAG, "Read bytes: '%s'", data);
-            int n = atoi((const char *)data);
+            float n = atoff((const char *)data);
             switch (selected_menu_id)
             {
             case 0:
-                switch (n)
+                switch ((int)n)
                 {
                 case 0: // Выводим меню
                     ESP_LOGI("menu", "-------------------------------------------");
@@ -268,7 +239,7 @@ void console_task(void *arg)
                     for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
                     {
                         if (strlen(menu[i].name) > 0)
-                            ESP_LOGI("menu", "%2i. %s: %i %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
+                            ESP_LOGI("menu", "%2i. %s: %f %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
                     }
 
                     ESP_LOGI("menu", "54. FreeRTOS INFO");
@@ -292,15 +263,15 @@ void console_task(void *arg)
                     esp_restart();
                     break;
                 default:
-                    if (n > 0 && n <= sizeof(menu) / sizeof(menu_t))
+                    if ((int)n > 0 && (int)n <= sizeof(menu) / sizeof(menu_t))
                     {
                         ESP_LOGI("menu", "-------------------------------------------");
-                        ESP_LOGI("menu", "%2i. %s: %i %s. Введите новое значение: ", n, menu[n - 1].name, menu[n - 1].val, menu[n - 1].izm);
+                        ESP_LOGI("menu", "%2i. %s: %f %s. Введите новое значение: ", (int)n, menu[(int)n - 1].name, menu[(int)n - 1].val, menu[(int)n - 1].izm);
                         ESP_LOGI("menu", "-------------------------------------------");
                     }
                     else
                     {
-                        ESP_LOGE("menu", "Err: %i", n);
+                        ESP_LOGE("menu", "Err: %f", n);
                     }
                     break;
                 }
@@ -319,7 +290,7 @@ void console_task(void *arg)
                         }
                         else
                         {
-                            err = nvs_set_i32(my_handle, menu[selected_menu_id - 1].id, menu[selected_menu_id - 1].val);
+                            err = nvs_set_blob(my_handle, menu[selected_menu_id - 1].id, &n, sizeof(float));
                             if (err != ESP_OK)
                             {
                                 ESP_LOGE(TAG, "%s", esp_err_to_name(err));
@@ -327,7 +298,7 @@ void console_task(void *arg)
                             else
                             {
                                 ESP_LOGI("menu", "-------------------------------------------");
-                                ESP_LOGI("menu", "%2i. %s: %i %s.", selected_menu_id, menu[selected_menu_id - 1].name, menu[selected_menu_id - 1].val, menu[selected_menu_id - 1].izm);
+                                ESP_LOGI("menu", "%2i. %s: %f %s.", selected_menu_id, menu[selected_menu_id - 1].name, menu[selected_menu_id - 1].val, menu[selected_menu_id - 1].izm);
                                 ESP_LOGI("menu", "-------------------------------------------");
                             }
                         }
@@ -394,7 +365,7 @@ int key_dir = 0;
 #define KEY_TIMEOUT (5 * 1000 / 20)
 int key_timeout = KEY_TIMEOUT;
 int setup_set[3] = {25, 10, 50};
-int setup_curr = 25;
+float setup_curr = 25;
 int setup_cntr = 0;
 
 static void button_event_cb(void *arg, void *data)
@@ -433,7 +404,7 @@ static void button_event_cb(void *arg, void *data)
         {
             setup_curr += key_dir;
 
-            ESP_LOGI(TAG, "Set; %d", setup_curr);
+            ESP_LOGI(TAG, "Set; %.0f", setup_curr);
         }
         break;
     case BUTTON_LONG_PRESS_UP:
