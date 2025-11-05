@@ -38,5 +38,6 @@ esp_err_t set_menu_val_by_id(const char *id, float value);
 void btn_task(void *arg);
 void console_task(void *arg);
 void adc_task(void *arg);
+void displ_task(void *arg);
 
 #endif

@@ -20,7 +20,7 @@ nvs_handle_t my_handle;
 static led_indicator_handle_t led_handle_0 = NULL;
 
 float setup_current = 25.0;
-int setup_current_changed = 0;
+extern QueueHandle_t xQueueDisplay;
 
 menu_t menu[] = {
     {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 5, .max = 99},
@@ -468,7 +468,8 @@ void btn_task(void *arg)
         // timeout key mode
         if (key_dir != 0)
         {
-            setup_current_changed = setup_curr;
+            xQueueOverwrite(xQueueDisplay, &setup_curr);
+            
             if (key_timeout-- <= 0)
             {
                 ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
@@ -478,7 +479,6 @@ void btn_task(void *arg)
                 key_dir = 0;
                 set_menu_val_by_id("elcurrent", setup_curr);
                 setup_current = setup_curr;
-                setup_current_changed = 0;
             }
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);

@@ -26,8 +26,9 @@ extern int setup_current_changed;
 
 static TaskHandle_t s_task_handle;
 
+extern QueueHandle_t xQueueDisplay;
+
 adc_continuous_handle_t adc_handle = NULL;
-dac_oneshot_handle_t chan0_handle;
 dac_oneshot_handle_t chan1_handle;
 
 static const char *TAG = "adc";
@@ -70,14 +71,8 @@ static void continuous_adc_init()
     dig_cfg.adc_pattern = adc_pattern;
     ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
 
-    /* DAC oneshot init */
-    dac_oneshot_config_t chan0_cfg = {
-        .chan_id = DAC_CHAN_0,
-    };
-    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan0_cfg, &chan0_handle));
-
     dac_oneshot_config_t chan1_cfg = {
-        .chan_id = DAC_CHAN_1,
+        .chan_id = DAC_CHAN_0,
     };
     ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan1_cfg, &chan1_handle));
 }
@@ -101,14 +96,13 @@ void adc_task(void *arg)
 
     vTaskDelay(1);
 
-    int k_calc = get_menu_val_by_id("Kcalc");
-    int k_displ = get_menu_val_by_id("Kdispl");
+    float k_calc = get_menu_val_by_id("Kcalc");
 
     pid_ctrl_block_handle_t pid_handle;
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                  .init_param.kp = (float)get_menu_val_by_id("pidP") / 10000.0f,
-                                  .init_param.ki = (float)get_menu_val_by_id("pidI") / 10000.0f,
-                                  .init_param.kd = (float)get_menu_val_by_id("pidD") / 10000.0f,
+                                  .init_param.kp = (float)get_menu_val_by_id("pidP"),
+                                  .init_param.ki = (float)get_menu_val_by_id("pidI"),
+                                  .init_param.kd = (float)get_menu_val_by_id("pidD"),
                                   .init_param.max_integral = 255,
                                   .init_param.min_integral = -255,
                                   .init_param.max_output = get_menu_val_by_id("pidMax"),
@@ -182,24 +176,10 @@ void adc_task(void *arg)
                 continue;
             }
 
-            float current = avgo * k_calc / 10000.0f; // in A
-            //ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
+            float current = avgo * k_calc; // in A
+                                           // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
 
-            uint8_t dac0 = UINT8_MAX;
-
-            float d0 = 0;
-
-            if (setup_current_changed != 0)
-                d0 = setup_current_changed * k_displ / 10000.0f;
-            else
-                d0 = current * k_displ / 10000.0f;
-
-            if ((int)d0 < UINT8_MAX)
-            {
-                dac0 = (int)d0;
-            }
-
-            dac_oneshot_output_voltage(chan0_handle, dac0);
+            xQueueSend(xQueueDisplay, &current, 0);
 
             uint8_t dac1 = UINT8_MAX;
             static float ret_result = 0;
@@ -212,7 +192,37 @@ void adc_task(void *arg)
 
             dac_oneshot_output_voltage(chan1_handle, dac1);
 
-            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); DAC0: %4d; PID: %4.3f", current, avgo , dac0, ret_result);
+            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); PID: %4.3f", current, avgo, ret_result);
+        }
+    }
+}
+
+void displ_task(void *arg)
+{
+    dac_oneshot_handle_t chan0_handle;
+    /* DAC oneshot init */
+
+    dac_oneshot_config_t chan0_cfg = {
+        .chan_id = DAC_CHAN_1,
+    };
+    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan0_cfg, &chan0_handle));
+
+    float val = 0;
+    float k_displ = get_menu_val_by_id("Kdispl");
+
+    while (1)
+    {
+        if (xQueueReceive(xQueueDisplay, &val, 100 / portTICK_PERIOD_MS))
+        {
+            float d0 = val * k_displ;
+
+            uint8_t dac0 = UINT8_MAX;
+            if ((int)d0 < UINT8_MAX)
+            {
+                dac0 = (int)d0;
+            }
+
+            dac_oneshot_output_voltage(chan0_handle, dac0);
         }
     }
 }
