@@ -35,6 +35,7 @@ static float pid_calc_positional(pid_ctrl_block_t *pid, float error)
     float output = 0;
     /* Add current error to the integral error */
     pid->integral_err += error;
+
     /* If the integral error is out of the range, it will be limited */
     pid->integral_err = MIN(pid->integral_err, pid->max_integral);
     pid->integral_err = MAX(pid->integral_err, pid->min_integral);
@@ -51,6 +52,8 @@ static float pid_calc_positional(pid_ctrl_block_t *pid, float error)
 
     /* Update previous error */
     pid->previous_err1 = error;
+
+    //ESP_LOGD("PID", "integral_err: %f", pid->integral_err);
 
     return output;
 }

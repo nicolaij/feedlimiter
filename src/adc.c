@@ -21,12 +21,15 @@
 
 #define BLOCK_SIZE 400 * 2
 
-extern float setup_current;
 extern int setup_current_changed;
 
 static TaskHandle_t s_task_handle;
 
 extern QueueHandle_t xQueueDisplay;
+
+extern int key_dir;
+
+extern int parameters_changed;
 
 adc_continuous_handle_t adc_handle = NULL;
 dac_oneshot_handle_t chan1_handle;
@@ -97,14 +100,16 @@ void adc_task(void *arg)
     vTaskDelay(1);
 
     float k_calc = get_menu_val_by_id("Kcalc");
+    float setup_current = get_menu_val_by_id("elcurrent");
 
     pid_ctrl_block_handle_t pid_handle;
+
     pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                  .init_param.kp = (float)get_menu_val_by_id("pidP"),
-                                  .init_param.ki = (float)get_menu_val_by_id("pidI"),
-                                  .init_param.kd = (float)get_menu_val_by_id("pidD"),
-                                  .init_param.max_integral = 255,
-                                  .init_param.min_integral = -255,
+                                  .init_param.kp = get_menu_val_by_id("pidP"),
+                                  .init_param.ki = get_menu_val_by_id("pidI"),
+                                  .init_param.kd = get_menu_val_by_id("pidD"),
+                                  .init_param.max_integral = get_menu_val_by_id("pidintMax"),
+                                  .init_param.min_integral = get_menu_val_by_id("pidintMin"),
                                   .init_param.max_output = get_menu_val_by_id("pidMax"),
                                   .init_param.min_output = get_menu_val_by_id("pidMin")};
 
@@ -176,10 +181,41 @@ void adc_task(void *arg)
                 continue;
             }
 
+            switch (parameters_changed)
+            {
+            case 1: // задание
+                setup_current = get_menu_val_by_id("elcurrent");
+                /* code */
+                break;
+            case 4: // P
+            case 5: // I
+            case 6: // D
+            case 7: // Out max
+            case 8: // Out min
+                pid_ctrl_parameter_t params = {.cal_type = PID_CAL_TYPE_POSITIONAL,
+                                               .kp = get_menu_val_by_id("pidP"),
+                                               .ki = get_menu_val_by_id("pidI"),
+                                               .kd = get_menu_val_by_id("pidD"),
+                                               .max_integral = get_menu_val_by_id("pidintMax"),
+                                               .min_integral = get_menu_val_by_id("pidintMin"),
+                                               .max_output = get_menu_val_by_id("pidMax"),
+                                               .min_output = get_menu_val_by_id("pidMin")};
+
+                pid_update_parameters(pid_handle, &params);
+                /* code */
+                break;
+
+            default:
+                break;
+            }
+
+            parameters_changed = 0;
+
             float current = avgo * k_calc; // in A
                                            // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
 
-            xQueueSend(xQueueDisplay, &current, 0);
+            if (key_dir == 0)
+                xQueueSend(xQueueDisplay, &current, 0);
 
             uint8_t dac1 = UINT8_MAX;
             static float ret_result = 0;
@@ -212,7 +248,7 @@ void displ_task(void *arg)
 
     while (1)
     {
-        if (xQueueReceive(xQueueDisplay, &val, 100 / portTICK_PERIOD_MS))
+        if (xQueueReceive(xQueueDisplay, &val, 500 / portTICK_PERIOD_MS))
         {
             float d0 = val * k_displ;
 

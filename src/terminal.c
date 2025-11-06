@@ -22,15 +22,19 @@ static led_indicator_handle_t led_handle_0 = NULL;
 float setup_current = 25.0;
 extern QueueHandle_t xQueueDisplay;
 
+int parameters_changed = 0;
+
 menu_t menu[] = {
-    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 5, .max = 99},
-    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.1333333, .min = 0, .max = 99999},
-    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 99999},
-    {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 1, .max = 99999},
-    {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 99999},
-    {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 99999},
-    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 99999},
-    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 99999},
+    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 0, .max = 99},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
+    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
+    {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
+    {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
+    {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
+    {.id = "pidintMax", .name = "PID Intergal maximum", .izm = "", .val = 255, .min = -999999, .max = 999999},
+    {.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = -255, .min = -999999, .max = 999999},
+    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 999999},
+    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 999999},
 };
 
 esp_err_t init_nvs()
@@ -303,7 +307,9 @@ void console_task(void *arg)
                             }
                         }
 
-                        ESP_LOGD(TAG, "Committing updates in NVS ... ");
+                        parameters_changed = selected_menu_id;
+
+                        //ESP_LOGD(TAG, "Committing updates in NVS ... ");
                         err = nvs_commit(my_handle);
                         if (err != ESP_OK)
                             ESP_LOGE(TAG, "Committing updates in NVS ... - Failed!");
@@ -364,7 +370,6 @@ blink_step_t const *led_indicator_blink_lists[] = {
 int key_dir = 0;
 #define KEY_TIMEOUT (5 * 1000 / 20)
 int key_timeout = KEY_TIMEOUT;
-int setup_set[3] = {25, 10, 50};
 float setup_curr = 25;
 int setup_cntr = 0;
 
@@ -427,7 +432,6 @@ static void button_event_cb(void *arg, void *data)
 
 void btn_task(void *arg)
 {
-
     // create gpio button
     const button_config_t btn_cfg = {0};
     const button_gpio_config_t btn_gpio_cfg = {
@@ -469,7 +473,7 @@ void btn_task(void *arg)
         if (key_dir != 0)
         {
             xQueueOverwrite(xQueueDisplay, &setup_curr);
-            
+
             if (key_timeout-- <= 0)
             {
                 ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
@@ -479,6 +483,7 @@ void btn_task(void *arg)
                 key_dir = 0;
                 set_menu_val_by_id("elcurrent", setup_curr);
                 setup_current = setup_curr;
+                parameters_changed = 1;
             }
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);
