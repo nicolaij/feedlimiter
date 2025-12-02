@@ -19,6 +19,8 @@
 
 #include "pid_ctrl.h"
 
+#include "tm1637.h"
+
 #define BLOCK_SIZE 400 * 2
 
 extern int setup_current_changed;
@@ -92,7 +94,7 @@ void adc_task(void *arg)
     int current_offset = 0;
     bool current_offset_set = false;
 
-#define OPERATE (500 / 20) // 500ms
+#define OPERATE (100 / 20)
 
     int operate_count = 0;
     int operate_sum = 0;
@@ -220,6 +222,7 @@ void adc_task(void *arg)
             uint8_t dac1 = UINT8_MAX;
             static float ret_result = 0;
             float input_error = setup_current - current;
+            // float intg = pid_handle->integral_err;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
             if ((int)ret_result < UINT8_MAX)
             {
@@ -228,37 +231,60 @@ void adc_task(void *arg)
 
             dac_oneshot_output_voltage(chan1_handle, dac1);
 
-            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); PID: %4.3f", current, avgo, ret_result);
+            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); PID: %4.3f, %.0f + %.0f + %.0f", current, avgo, ret_result, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
         }
     }
 }
 
 void displ_task(void *arg)
 {
-    dac_oneshot_handle_t chan0_handle;
-    /* DAC oneshot init */
 
-    dac_oneshot_config_t chan0_cfg = {
-        .chan_id = DAC_CHAN_1,
+    // Configure the display
+    tm1637_config_t config = {
+        .clk_pin = TM1637_CLK_PIN,
+        .dio_pin = TM1637_DIO_PIN,
+        .bit_delay_us = 100 // Default timing
     };
-    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan0_cfg, &chan0_handle));
+
+    // Initialize the display
+    tm1637_handle_t display;
+    esp_err_t ret = tm1637_init(&config, &display);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize TM1637: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI(TAG, "Display initialized successfully");
+
+    // Set brightness to medium (0-7 range)
+    tm1637_set_brightness(display, 4, true);
+
+    // Example 1: Display a number
+    ESP_LOGI(TAG, "Displaying number: 1234");
+    tm1637_show_number(display, 1234, false, 4, 0);
+    vTaskDelay(pdMS_TO_TICKS(2000));
 
     float val = 0;
-    float k_displ = get_menu_val_by_id("Kdispl");
+    uint8_t char_display[4];
+    int val1 = 99;
 
     while (1)
     {
         if (xQueueReceive(xQueueDisplay, &val, 500 / portTICK_PERIOD_MS))
         {
-            float d0 = val * k_displ;
+            val1 = val;
+            if (val1 > 99)
+                val1 = 99;
+            if (val1 < 0)
+                val1 = 0;
 
-            uint8_t dac0 = UINT8_MAX;
-            if ((int)d0 < UINT8_MAX)
-            {
-                dac0 = (int)d0;
-            }
+            char_display[0] = (val1 >= 10.0) ? tm1637_encode_digit(val1 / 10) : 0;
+            char_display[1] = tm1637_encode_digit(val1 % 10) | TM1637_SEG_DP;
+            char_display[2] = 0;
+            char_display[3] = 0;
 
-            dac_oneshot_output_voltage(chan0_handle, dac0);
+            tm1637_set_segments(display, char_display, 4, 0);
         }
     }
 }

@@ -18,6 +18,8 @@
 #define LED_PIN GPIO_NUM_2
 #define BTN_PIN GPIO_NUM_0
 #define ADC_CHANNEL ADC_CHANNEL_5
+#define TM1637_CLK_PIN GPIO_NUM_21
+#define TM1637_DIO_PIN GPIO_NUM_20
 
 typedef struct
 {

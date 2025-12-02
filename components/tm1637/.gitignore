@@ -1,0 +1,21 @@
+# Ignore build output
+/build/
+/*.o
+/*.obj
+/*.elf
+/*.bin
+/*.map
+/dist/
+
+# Ignore ESP-IDF specific files
+sdkconfig
+sdkconfig.old
+
+# Ignore editor files
+*.swp
+*.swo
+*.tmp
+*.log
+.DS_Store
+.vscode/
+.idea/

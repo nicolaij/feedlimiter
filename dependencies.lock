@@ -22,11 +22,11 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.0
+    version: 5.5.1
 direct_dependencies:
 - espressif/cmake_utilities
 - espressif/led_strip
 - idf
-manifest_hash: 41998c9050d4271c9fd0f61fea1a7162bd849aa5ce875626ed36893df6646834
+manifest_hash: 4b76258fa5f69ed26af31707dc91fac6d147eb0e5550b08bb5870ffa7cc0f55e
 target: esp32
 version: 2.0.0

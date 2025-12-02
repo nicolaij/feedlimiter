@@ -12,24 +12,6 @@
 
 static const char *TAG = "pid_ctrl";
 
-typedef struct pid_ctrl_block_t pid_ctrl_block_t;
-typedef float (*pid_cal_func_t)(pid_ctrl_block_t *pid, float error);
-
-struct pid_ctrl_block_t {
-    float Kp; // PID Kp value
-    float Ki; // PID Ki value
-    float Kd; // PID Kd value
-    float previous_err1; // e(k-1)
-    float previous_err2; // e(k-2)
-    float integral_err;  // Sum of error
-    float last_output;  // PID output in last control period
-    float max_output;   // PID maximum output limitation
-    float min_output;   // PID minimum output limitation
-    float max_integral; // PID maximum integral value limitation
-    float min_integral; // PID minimum integral value limitation
-    pid_cal_func_t calculate_func; // calculation function, depends on actual PID type set by user
-};
-
 static float pid_calc_positional(pid_ctrl_block_t *pid, float error)
 {
     float output = 0;
@@ -51,6 +33,7 @@ static float pid_calc_positional(pid_ctrl_block_t *pid, float error)
     output = MAX(output, pid->min_output);
 
     /* Update previous error */
+    pid->previous_err2 = pid->previous_err1;
     pid->previous_err1 = error;
 
     //ESP_LOGD("PID", "integral_err: %f", pid->integral_err);
