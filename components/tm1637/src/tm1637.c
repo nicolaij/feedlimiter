@@ -102,7 +102,8 @@ struct tm1637_dev_t
 
 static inline void delay_us(tm1637_handle_t dev)
 {
-    ets_delay_us(dev->delay_us);
+    //ets_delay_us(dev->delay_us);
+    vTaskDelay(1);
 }
 
 /**
@@ -112,8 +113,8 @@ static inline void delay_us(tm1637_handle_t dev)
 static void protocol_start(tm1637_handle_t dev)
 {
     /* Ensure both pins are high initially */
-    gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT);
-    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT);
+    gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT_OD);
+    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT_OD);
     gpio_set_level(dev->pin_dio, 1);
     gpio_set_level(dev->pin_clk, 1);
     delay_us(dev);
@@ -132,8 +133,8 @@ static void protocol_start(tm1637_handle_t dev)
 static void protocol_stop(tm1637_handle_t dev)
 {
     /* CLK low, DIO low */
-    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT);
-    gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT);
+    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT_OD);
+    gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT_OD);
     gpio_set_level(dev->pin_clk, 0);
     gpio_set_level(dev->pin_dio, 0);
     delay_us(dev);
@@ -153,7 +154,7 @@ static void protocol_stop(tm1637_handle_t dev)
  */
 static bool protocol_transmit_byte(tm1637_handle_t dev, uint8_t byte_data)
 {
-    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT);
+    gpio_set_direction(dev->pin_clk, GPIO_MODE_OUTPUT_OD);
 
     /* Send 8 bits, LSB first */
     for (uint8_t bit_idx = 0; bit_idx < 8; bit_idx++)
@@ -171,7 +172,7 @@ static bool protocol_transmit_byte(tm1637_handle_t dev, uint8_t byte_data)
         else
         {
             /* Low: drive DIO low */
-            gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT);
+            gpio_set_direction(dev->pin_dio, GPIO_MODE_OUTPUT_OD);
             gpio_set_level(dev->pin_dio, 0);
         }
         delay_us(dev);
@@ -271,7 +272,7 @@ esp_err_t tm1637_init(const tm1637_config_t *config, tm1637_handle_t *handle)
 
     /* Configure GPIO pins */
     gpio_config_t io_cfg = {
-        .mode = GPIO_MODE_OUTPUT,
+        .mode = GPIO_MODE_OUTPUT_OD,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,

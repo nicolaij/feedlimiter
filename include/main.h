@@ -18,8 +18,8 @@
 #define LED_PIN GPIO_NUM_2
 #define BTN_PIN GPIO_NUM_0
 #define ADC_CHANNEL ADC_CHANNEL_5
-#define TM1637_CLK_PIN GPIO_NUM_21
-#define TM1637_DIO_PIN GPIO_NUM_20
+#define TM1637_CLK_PIN GPIO_NUM_22
+#define TM1637_DIO_PIN GPIO_NUM_21
 
 typedef struct
 {
@@ -30,6 +30,13 @@ typedef struct
     const float min;
     const float max;
 } menu_t;
+
+typedef struct
+{
+    int curr;
+    int set;
+    bool dots;
+} displ_t;
 
 esp_err_t init_nvs();
 esp_err_t read_nvs_menu();

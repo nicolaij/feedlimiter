@@ -21,7 +21,8 @@
 
 #include "tm1637.h"
 
-#define BLOCK_SIZE 400 * 2
+#define POINTS10 100 // измерений каждых 10 мс
+#define CYCLE 200    // ms
 
 extern int setup_current_changed;
 
@@ -54,8 +55,8 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 static void continuous_adc_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
-        .max_store_buf_size = BLOCK_SIZE * 2,
-        .conv_frame_size = BLOCK_SIZE,
+        .max_store_buf_size = POINTS10 * 2 * 2 * 2,
+        .conv_frame_size = POINTS10 * 2 * 2,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
@@ -66,12 +67,17 @@ static void continuous_adc_init()
     };
 
     adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
-    dig_cfg.pattern_num = 1;
+    dig_cfg.pattern_num = 2;
 
     adc_pattern[0].atten = ADC_ATTEN_DB_12;
     adc_pattern[0].channel = ADC_CHANNEL;
     adc_pattern[0].unit = ADC_UNIT_1;
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
+
+    adc_pattern[1].atten = ADC_ATTEN_DB_12;
+    adc_pattern[1].channel = ADC_CHANNEL_0;
+    adc_pattern[1].unit = ADC_UNIT_1;
+    adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     dig_cfg.adc_pattern = adc_pattern;
     ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
@@ -86,23 +92,33 @@ void adc_task(void *arg)
 {
     esp_err_t ret;
     uint32_t ret_num = 0;
-    uint8_t result[BLOCK_SIZE] = {0};
-    int median_filter[3];
-    uint8_t median_filter_fill = 0;
+    uint8_t result[POINTS10 * 2 * 2] = {0};
+    int median_filter_current[3];
+    uint8_t median_filter_current_fill = 0;
+    int median_filter_setup[3];
+    uint8_t median_filter_setup_fill = 0;
     int digital_filter;
 
     int current_offset = 0;
     bool current_offset_set = false;
 
-#define OPERATE (100 / 20)
-
     int operate_count = 0;
     int operate_sum = 0;
+
+    int avg_setup_sum = 0;
 
     vTaskDelay(1);
 
     float k_calc = get_menu_val_by_id("Kcalc");
-    float setup_current = get_menu_val_by_id("elcurrent");
+    // float k_setup = get_menu_val_by_id("KsetupI");
+
+    float Isetmin = get_menu_val_by_id("Isetmin");
+    float Isetmax = get_menu_val_by_id("Isetmax");
+    float Iporog = get_menu_val_by_id("Iporog");
+
+    // float setup_current = get_menu_val_by_id("elcurrent");
+
+    displ_t displ_data;
 
     pid_ctrl_block_handle_t pid_handle;
 
@@ -126,52 +142,87 @@ void adc_task(void *arg)
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
+    int64_t time1 = esp_timer_get_time();
+    int64_t time2 = esp_timer_get_time();
+
     while (1)
     {
-        ret = adc_continuous_read(adc_handle, result, BLOCK_SIZE, &ret_num, ADC_MAX_DELAY);
-
         adc_digi_output_data_t *p = (void *)result;
-        int sum = 0;
-        int count = 0;
-        while ((uint8_t *)p < result + BLOCK_SIZE)
+        int sum_current = 0;
+        int count_current = 0;
+        int sum_setup = 0;
+        int count_setup = 0;
+
+        time1 = time2;
+
+        ret = adc_continuous_read(adc_handle, result, POINTS10 * 2 * 2, &ret_num, ADC_MAX_DELAY);
+
+        while ((uint8_t *)p < result + POINTS10 * 2 * 2)
         {
             if (p->type1.channel == ADC_CHANNEL)
             {
-                median_filter[median_filter_fill % 3] = p->type1.data;
-                median_filter_fill++;
+                median_filter_current[median_filter_current_fill % 3] = p->type1.data;
+                median_filter_current_fill++;
 
-                if (median_filter_fill >= 3)
+                if (median_filter_current_fill >= 3)
                 {
-                    digital_filter = MEDIAN(median_filter);
-                    if (median_filter_fill >= 6)
-                        median_filter_fill = 3;
+                    digital_filter = MEDIAN(median_filter_current);
+                    if (median_filter_current_fill >= 6)
+                        median_filter_current_fill = 3;
                 }
                 else
                 {
                     digital_filter = p->type1.data;
                 }
 
-                sum += digital_filter;
-                count++;
+                sum_current += digital_filter;
+                count_current++;
+            }
+            if (p->type1.channel == ADC_CHANNEL_0)
+            {
+                median_filter_setup[median_filter_setup_fill % 3] = p->type1.data;
+                median_filter_setup_fill++;
+
+                if (median_filter_setup_fill >= 3)
+                {
+                    digital_filter = MEDIAN(median_filter_setup);
+                    if (median_filter_setup_fill >= 6)
+                        median_filter_setup_fill = 3;
+                }
+                else
+                {
+                    digital_filter = p->type1.data;
+                }
+
+                sum_setup += digital_filter;
+                count_setup++;
             }
             p++;
         }
 
+        // ESP_LOGD("main", "ADC0 %4d,%4d", count_current, count_setup);
+
         // обработка
-        if (count > 0)
+        if (count_current > 0)
         {
+            int avg = sum_current / count_current - current_offset;
+            int avg_setup = sum_setup / count_setup;
 
-            int avg = sum / count - current_offset;
+            operate_sum += avg * avg;
+            avg_setup_sum += avg_setup;
+            operate_count++;
 
-            if (operate_count++ < OPERATE)
+            if (operate_count < (CYCLE / 10))
             {
-                operate_sum += avg * avg;
                 continue;
             }
 
-            float avgo = sqrtf((float)operate_sum / OPERATE);
+            float avgo = sqrtf((float)operate_sum / operate_count);
+            float avgs = avg_setup_sum / operate_count;
+
             operate_count = 0;
             operate_sum = 0;
+            avg_setup_sum = 0;
 
             if (!current_offset_set)
             {
@@ -186,9 +237,6 @@ void adc_task(void *arg)
             switch (parameters_changed)
             {
             case 1: // задание
-                setup_current = get_menu_val_by_id("elcurrent");
-                /* code */
-                break;
             case 4: // P
             case 5: // I
             case 6: // D
@@ -214,24 +262,46 @@ void adc_task(void *arg)
             parameters_changed = 0;
 
             float current = avgo * k_calc; // in A
-                                           // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
 
-            if (key_dir == 0)
-                xQueueSend(xQueueDisplay, &current, 0);
+            float setup_current = Isetmin + avgs / 4095.0 * (Isetmax - Isetmin);
+
+            displ_data.curr = current;
+
+            if (current < Iporog)
+            {
+                displ_data.dots = true;
+                displ_data.set = setup_current;            }
+            else
+            {
+                displ_data.dots = true;
+                displ_data.set = setup_current;
+            }
+
+            // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
+
+            xQueueSend(xQueueDisplay, &displ_data, 0);
 
             uint8_t dac1 = UINT8_MAX;
             static float ret_result = 0;
             float input_error = setup_current - current;
             // float intg = pid_handle->integral_err;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
-            if ((int)ret_result < UINT8_MAX)
+
+            dac1 = (int)ret_result;
+
+            if ((int)ret_result > UINT8_MAX)
             {
-                dac1 = (int)ret_result;
+                dac1 = UINT8_MAX;
             }
+
+            if (displ_data.dots == false)
+                dac1 = avgs / 4095.0 * UINT8_MAX;
 
             dac_oneshot_output_voltage(chan1_handle, dac1);
 
-            ESP_LOGI("main", "Current: %4.1f A (%4.0f ); PID: %4.3f, %.0f + %.0f + %.0f", current, avgo, ret_result, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            time2 = esp_timer_get_time();
+
+            ESP_LOGI("main", "%8lld Current: %4.1f A (%4.0f) Setup: %4d; OUT: %4d, %.0f + %.0f + %.0f", time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
         }
     }
 }
@@ -257,32 +327,32 @@ void displ_task(void *arg)
 
     ESP_LOGI(TAG, "Display initialized successfully");
 
-    // Set brightness to medium (0-7 range)
+    // Set brightness to medium (0-7", .izm = "", .val range)
     tm1637_set_brightness(display, 4, true);
 
-    // Example 1: Display a number
-    ESP_LOGI(TAG, "Displaying number: 1234");
-    tm1637_show_number(display, 1234, false, 4, 0);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    float val = 0;
-    uint8_t char_display[4];
-    int val1 = 99;
+    displ_t displ_data;
+    uint8_t char_display[TM1637_MAX_DIGITS];
 
     while (1)
     {
-        if (xQueueReceive(xQueueDisplay, &val, 500 / portTICK_PERIOD_MS))
+        if (xQueueReceive(xQueueDisplay, &displ_data, 500 / portTICK_PERIOD_MS))
         {
-            val1 = val;
+            int val1 = displ_data.curr;
             if (val1 > 99)
                 val1 = 99;
             if (val1 < 0)
                 val1 = 0;
 
+            int val2 = displ_data.set;
+            if (val2 > 99)
+                val2 = 99;
+            if (val2 < 0)
+                val2 = 0;
+
             char_display[0] = (val1 >= 10.0) ? tm1637_encode_digit(val1 / 10) : 0;
-            char_display[1] = tm1637_encode_digit(val1 % 10) | TM1637_SEG_DP;
-            char_display[2] = 0;
-            char_display[3] = 0;
+            char_display[1] = tm1637_encode_digit(val1 % 10) | ((displ_data.dots == true) ? TM1637_SEG_DP : 0);
+            char_display[2] = tm1637_encode_digit(val2 / 10);
+            char_display[3] = tm1637_encode_digit(val2 % 10);
 
             tm1637_set_segments(display, char_display, 4, 0);
         }

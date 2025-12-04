@@ -19,7 +19,9 @@ nvs_handle_t my_handle;
 
 static led_indicator_handle_t led_handle_0 = NULL;
 
-float setup_current = 25.0;
+int setup_current_active = 25.0;
+int setup_current = 25.0;
+
 extern QueueHandle_t xQueueDisplay;
 
 int parameters_changed = 0;
@@ -28,6 +30,9 @@ menu_t menu[] = {
     {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 0, .max = 99},
     {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
+    {.id = "Iporog", .name = "Порог тока при врезке", .izm = "", .val = 21.0, .min = 0, .max = 999999},
+    {.id = "Isetmin", .name = "Минимум I задание", .izm = "", .val = 21.0, .min = 0, .max = 999999},
+    {.id = "Isetmax", .name = "Максимум I задание", .izm = "", .val = 30.0, .min = 0, .max = 999999},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
@@ -370,7 +375,7 @@ blink_step_t const *led_indicator_blink_lists[] = {
 int key_dir = 0;
 #define KEY_TIMEOUT (5 * 1000 / 20)
 int key_timeout = KEY_TIMEOUT;
-float setup_curr = 25;
+int setup_curr = 25;
 int setup_cntr = 0;
 
 static void button_event_cb(void *arg, void *data)
@@ -409,7 +414,7 @@ static void button_event_cb(void *arg, void *data)
         {
             setup_curr += key_dir;
 
-            ESP_LOGI(TAG, "Set; %.0f", setup_curr);
+            ESP_LOGI(TAG, "Set; %i", setup_curr);
         }
         break;
     case BUTTON_LONG_PRESS_UP:
@@ -464,8 +469,7 @@ void btn_task(void *arg)
     ESP_ERROR_CHECK(led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0));
     assert(led_handle_0 != NULL);
 
-    setup_curr = menu[0].val;
-    setup_current = setup_curr;
+    setup_current_active = menu[0].val;
 
     while (1)
     {
@@ -481,9 +485,6 @@ void btn_task(void *arg)
                 ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
 
                 key_dir = 0;
-                set_menu_val_by_id("elcurrent", setup_curr);
-                setup_current = setup_curr;
-                parameters_changed = 1;
             }
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);
