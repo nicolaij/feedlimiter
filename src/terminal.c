@@ -33,6 +33,7 @@ menu_t menu[] = {
     {.id = "Iporog", .name = "Порог тока при врезке", .izm = "", .val = 21.0, .min = 0, .max = 999999},
     {.id = "Isetmin", .name = "Минимум I задание", .izm = "", .val = 21.0, .min = 0, .max = 999999},
     {.id = "Isetmax", .name = "Максимум I задание", .izm = "", .val = 30.0, .min = 0, .max = 999999},
+    {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3087, .min = 0, .max = 10000},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
@@ -476,7 +477,7 @@ void btn_task(void *arg)
         // timeout key mode
         if (key_dir != 0)
         {
-            xQueueOverwrite(xQueueDisplay, &setup_curr);
+            //xQueueOverwrite(xQueueDisplay, &setup_curr);
 
             if (key_timeout-- <= 0)
             {

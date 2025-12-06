@@ -22,7 +22,7 @@
 #include "tm1637.h"
 
 #define POINTS10 100 // измерений каждых 10 мс
-#define CYCLE 200    // ms
+#define CYCLE 300    // ms
 
 extern int setup_current_changed;
 
@@ -55,7 +55,7 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 static void continuous_adc_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
-        .max_store_buf_size = POINTS10 * 2 * 2 * 2,
+        .max_store_buf_size = POINTS10 * 2 * 2 * 2 * 20,
         .conv_frame_size = POINTS10 * 2 * 2,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
@@ -107,14 +107,21 @@ void adc_task(void *arg)
 
     int avg_setup_sum = 0;
 
+    int run_stage = 0;
+
+    float currents[UINT8_MAX];
+    uint8_t currents_cnt = 0;
+
+    float current_xx = 0;
+
     vTaskDelay(1);
 
     float k_calc = get_menu_val_by_id("Kcalc");
-    // float k_setup = get_menu_val_by_id("KsetupI");
-
     float Isetmin = get_menu_val_by_id("Isetmin");
     float Isetmax = get_menu_val_by_id("Isetmax");
     float Iporog = get_menu_val_by_id("Iporog");
+
+    float ADCmax = get_menu_val_by_id("ADCmax");
 
     // float setup_current = get_menu_val_by_id("elcurrent");
 
@@ -134,12 +141,13 @@ void adc_task(void *arg)
     continuous_adc_init();
 
     ESP_ERROR_CHECK(pid_new_control_block(&pid_conf, &pid_handle));
-
+/*
     adc_continuous_evt_cbs_t cbs = {
         .on_conv_done = s_conv_done_cb,
     };
 
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
+ */
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
     int64_t time1 = esp_timer_get_time();
@@ -200,7 +208,9 @@ void adc_task(void *arg)
             p++;
         }
 
-        // ESP_LOGD("main", "ADC0 %4d,%4d", count_current, count_setup);
+        //time2 = esp_timer_get_time();
+        //ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d", time2 - time1, count_current, ret_num);
+        //continue;
 
         // обработка
         if (count_current > 0)
@@ -231,17 +241,13 @@ void adc_task(void *arg)
 
                 ESP_LOGI("main", "ADC0 offset: %f", avgo);
 
+                run_stage = 1;
+
                 continue;
             }
 
-            switch (parameters_changed)
+            if (parameters_changed)
             {
-            case 1: // задание
-            case 4: // P
-            case 5: // I
-            case 6: // D
-            case 7: // Out max
-            case 8: // Out min
                 pid_ctrl_parameter_t params = {.cal_type = PID_CAL_TYPE_POSITIONAL,
                                                .kp = get_menu_val_by_id("pidP"),
                                                .ki = get_menu_val_by_id("pidI"),
@@ -252,30 +258,72 @@ void adc_task(void *arg)
                                                .min_output = get_menu_val_by_id("pidMin")};
 
                 pid_update_parameters(pid_handle, &params);
-                /* code */
-                break;
 
-            default:
-                break;
+                k_calc = get_menu_val_by_id("Kcalc");
+                Isetmin = get_menu_val_by_id("Isetmin");
+                Isetmax = get_menu_val_by_id("Isetmax");
+                Iporog = get_menu_val_by_id("Iporog");
+                ADCmax = get_menu_val_by_id("ADCmax");
+                parameters_changed = 0;
             }
-
-            parameters_changed = 0;
 
             float current = avgo * k_calc; // in A
 
-            float setup_current = Isetmin + avgs / 4095.0 * (Isetmax - Isetmin);
+            currents[currents_cnt] = current;
+
+            if (run_stage == 5)
+            {
+                if (currents[currents_cnt] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 1)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 2)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 3)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 4)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 5)] < (current_xx + 1.0))
+                {
+                    run_stage = 4;
+                }
+            }
+
+            if (run_stage == 4) // врезка
+            {
+                if (current > current_xx + 2.0)
+                {
+                    run_stage = 5;
+
+                    pid_handle->integral_err = (avgs / ADCmax * UINT8_MAX) / pid_handle->Ki;
+                }
+
+                if (currents[currents_cnt] < (2.0) && currents[(uint8_t)(currents_cnt - 1)] < (2.0) && currents[(uint8_t)(currents_cnt - 2)] < (2.0))
+                {
+                    run_stage = 1;
+                }
+            }
+
+            if (run_stage == 3) // фиксируем ХХ
+            {
+                current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)] + currents[(uint8_t)(currents_cnt - 2)]) / 3;
+                run_stage = 4;
+            }
+
+            if (run_stage == 2) // ждем стабилизации тока
+            {
+                if (currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 1)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 1)] - 1 && currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 2)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 2)] - 1 && currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 3)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 3)] - 1)
+                {
+                    if (currents[currents_cnt] < Iporog)
+                        run_stage = 3;
+                }
+            }
+
+            currents_cnt++;
+
+            if (run_stage == 1) // ловим пуск пилы
+            {
+                if (current > 60.0)
+                    run_stage = 2;
+            }
+
+            float setup_current = roundf(Isetmin + avgs / ADCmax * (Isetmax - Isetmin));
+            if (setup_current < Iporog)
+                setup_current = Iporog;
 
             displ_data.curr = current;
-
-            if (current < Iporog)
-            {
-                displ_data.dots = true;
-                displ_data.set = setup_current;            }
-            else
-            {
-                displ_data.dots = true;
-                displ_data.set = setup_current;
-            }
+            displ_data.dots = true;
+            displ_data.set = setup_current;
 
             // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
 
@@ -294,14 +342,18 @@ void adc_task(void *arg)
                 dac1 = UINT8_MAX;
             }
 
-            if (displ_data.dots == false)
-                dac1 = avgs / 4095.0 * UINT8_MAX;
+            if (run_stage != 5)
+            {
+                dac1 = avgs / ADCmax * UINT8_MAX;
+                pid_reset_ctrl_block(pid_handle);
+            }
 
             dac_oneshot_output_voltage(chan1_handle, dac1);
 
             time2 = esp_timer_get_time();
 
-            ESP_LOGI("main", "%8lld Current: %4.1f A (%4.0f) Setup: %4d; OUT: %4d, %.0f + %.0f + %.0f", time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            ESP_LOGI("main", "%d %8lld Current: %4.1f A (%4.0f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", run_stage, time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            printf(">PV:%.1f\n>SP:%.0f\n>MV:%d\n", current, setup_current, dac1);
         }
     }
 }
@@ -335,7 +387,7 @@ void displ_task(void *arg)
 
     while (1)
     {
-        if (xQueueReceive(xQueueDisplay, &displ_data, 500 / portTICK_PERIOD_MS))
+        if (xQueueReceive(xQueueDisplay, &displ_data, portMAX_DELAY))
         {
             int val1 = displ_data.curr;
             if (val1 > 99)
@@ -356,5 +408,6 @@ void displ_task(void *arg)
 
             tm1637_set_segments(display, char_display, 4, 0);
         }
+        vTaskDelay(1);
     }
 }
