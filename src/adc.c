@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 
 #include <math.h>
+
 #include "esp_adc/adc_continuous.h"
 
 #include "driver/dac_oneshot.h"
@@ -20,6 +21,8 @@
 #include "pid_ctrl.h"
 
 #include "tm1637.h"
+
+#include "hal/adc_ll.h"
 
 #define POINTS10 100 // измерений каждых 10 мс
 #define CYCLE 300    // ms
@@ -47,7 +50,7 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 {
     BaseType_t mustYield = pdFALSE;
     // Notify that ADC continuous driver has done enough number of conversions
-    // vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
+    vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
 
     return (mustYield == pdTRUE);
 }
@@ -55,13 +58,13 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 static void continuous_adc_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
-        .max_store_buf_size = POINTS10 * 2 * 2 * 2 * 20,
+        .max_store_buf_size = POINTS10 * 2 * 2 * 2 * 2,
         .conv_frame_size = POINTS10 * 2 * 2,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 20000,
+        .sample_freq_hz = 20000 * 3,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -114,7 +117,11 @@ void adc_task(void *arg)
 
     float current_xx = 0;
 
+    int err_count = 0;
+
     vTaskDelay(1);
+
+    s_task_handle = xTaskGetCurrentTaskHandle();
 
     float k_calc = get_menu_val_by_id("Kcalc");
     float Isetmin = get_menu_val_by_id("Isetmin");
@@ -141,34 +148,43 @@ void adc_task(void *arg)
     continuous_adc_init();
 
     ESP_ERROR_CHECK(pid_new_control_block(&pid_conf, &pid_handle));
-/*
+
     adc_continuous_evt_cbs_t cbs = {
         .on_conv_done = s_conv_done_cb,
     };
 
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
- */
+
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+    adc_ll_digi_set_convert_limit_num(2);
 
     int64_t time1 = esp_timer_get_time();
     int64_t time2 = esp_timer_get_time();
 
     while (1)
     {
+        // time1 = esp_timer_get_time();
+
+        // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
         adc_digi_output_data_t *p = (void *)result;
         int sum_current = 0;
         int count_current = 0;
         int sum_setup = 0;
         int count_setup = 0;
 
-        time1 = time2;
-
         ret = adc_continuous_read(adc_handle, result, POINTS10 * 2 * 2, &ret_num, ADC_MAX_DELAY);
-
-        while ((uint8_t *)p < result + POINTS10 * 2 * 2)
+        if (ret == ESP_ERR_TIMEOUT)
         {
-            if (p->type1.channel == ADC_CHANNEL)
+            vTaskDelay(1);
+            continue;
+        }
+
+        while ((uint8_t *)p < result + ret_num)
+        {
+            switch (p->type1.channel)
             {
+            case ADC_CHANNEL:
                 median_filter_current[median_filter_current_fill % 3] = p->type1.data;
                 median_filter_current_fill++;
 
@@ -185,9 +201,9 @@ void adc_task(void *arg)
 
                 sum_current += digital_filter;
                 count_current++;
-            }
-            if (p->type1.channel == ADC_CHANNEL_0)
-            {
+                break;
+
+            case ADC_CHANNEL_0:
                 median_filter_setup[median_filter_setup_fill % 3] = p->type1.data;
                 median_filter_setup_fill++;
 
@@ -204,13 +220,16 @@ void adc_task(void *arg)
 
                 sum_setup += digital_filter;
                 count_setup++;
+            default:
+                err_count++;
+                break;
             }
             p++;
         }
 
-        //time2 = esp_timer_get_time();
-        //ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d", time2 - time1, count_current, ret_num);
-        //continue;
+        // time2 = esp_timer_get_time();
+        // ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d, %x", time2 - time1, count_current, ret_num, ret);
+        // continue;
 
         // обработка
         if (count_current > 0)
@@ -242,7 +261,6 @@ void adc_task(void *arg)
                 ESP_LOGI("main", "ADC0 offset: %f", avgo);
 
                 run_stage = 1;
-
                 continue;
             }
 
@@ -353,7 +371,9 @@ void adc_task(void *arg)
             time2 = esp_timer_get_time();
 
             ESP_LOGI("main", "%d %8lld Current: %4.1f A (%4.0f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", run_stage, time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
-            printf(">PV:%.1f\n>SP:%.0f\n>MV:%d\n", current, setup_current, dac1);
+            // printf(">PV:%.1f\n>SP:%.0f\n>MV:%d\n", current, setup_current, dac1);
+
+            time1 = time2;
         }
     }
 }
