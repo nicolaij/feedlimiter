@@ -315,6 +315,8 @@ void adc_task(void *arg)
             if (run_stage == 3) // фиксируем ХХ
             {
                 current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)] + currents[(uint8_t)(currents_cnt - 2)]) / 3;
+                Isetmin = current_xx;
+                Iporog = current_xx + 2;
                 run_stage = 4;
             }
 
