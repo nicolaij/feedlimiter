@@ -231,7 +231,7 @@ void adc_task(void *arg)
         // ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d, %x", time2 - time1, count_current, ret_num, ret);
         // continue;
 
-        // обработка
+        // обработка 
         if (count_current > 0)
         {
             int avg = sum_current / count_current - current_offset;
