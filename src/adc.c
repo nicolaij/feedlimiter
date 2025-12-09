@@ -64,7 +64,7 @@ static void continuous_adc_init()
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 20000 * 3,
+        .sample_freq_hz = 20000,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -121,6 +121,16 @@ void adc_task(void *arg)
 
     vTaskDelay(1);
 
+        gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    io_conf.pin_bit_mask = BIT64(GPIO_NUM_15);
+    // set as input mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+
     s_task_handle = xTaskGetCurrentTaskHandle();
 
     float k_calc = get_menu_val_by_id("Kcalc");
@@ -156,7 +166,7 @@ void adc_task(void *arg)
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
 
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
-    adc_ll_digi_set_convert_limit_num(2);
+    //adc_ll_digi_set_convert_limit_num(2);
 
     int64_t time1 = esp_timer_get_time();
     int64_t time2 = esp_timer_get_time();
@@ -333,11 +343,14 @@ void adc_task(void *arg)
 
             if (run_stage == 1) // ловим пуск пилы
             {
-                if (current > 60.0)
+                if (current > 50.0)
                     run_stage = 2;
             }
 
-            float setup_current = roundf(Isetmin + avgs / ADCmax * (Isetmax - Isetmin));
+            if (gpio_get_level(GPIO_NUM_15) == 1)
+                run_stage = 1;
+
+            float setup_current = (Isetmin + avgs / ADCmax * (Isetmax - Isetmin));
             if (setup_current < Iporog)
                 setup_current = Iporog;
 
@@ -353,6 +366,7 @@ void adc_task(void *arg)
             static float ret_result = 0;
             float input_error = setup_current - current;
             // float intg = pid_handle->integral_err;
+            pid_handle->max_output = avgs / ADCmax * UINT8_MAX * 1.1;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             dac1 = (int)ret_result;
@@ -372,8 +386,8 @@ void adc_task(void *arg)
 
             time2 = esp_timer_get_time();
 
-            ESP_LOGI("main", "%d %8lld Current: %4.1f A (%4.0f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", run_stage, time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
-            // printf(">PV:%.1f\n>SP:%.0f\n>MV:%d\n", current, setup_current, dac1);
+            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (%4.0f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_15), run_stage, time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
 
             time1 = time2;
         }
