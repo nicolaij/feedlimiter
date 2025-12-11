@@ -27,18 +27,23 @@ extern QueueHandle_t xQueueDisplay;
 int parameters_changed = 0;
 
 menu_t menu[] = {
-    {.id = "elcurrent", .name = "Задание", .izm = "А", .val = 25.0, .min = 0, .max = 99},
-    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
-    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
-    {.id = "Iporog", .name = "Порог тока при врезке", .izm = "", .val = 21.0, .min = 0, .max = 999999},
-    {.id = "Isetmin", .name = "Минимум I задание", .izm = "", .val = 21.0, .min = 0, .max = 999999},
-    {.id = "Isetmax", .name = "Максимум I задание", .izm = "", .val = 30.0, .min = 0, .max = 999999},
+    /*0*/ {.id = "idn", .name = "Номер устройства", .izm = "", .val = 1, .min = 1, .max = 1000000},
+    /*1*/ {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
+    {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.000001, .min = 0, .max = 999999},
+    //{.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
+    {.id = "Imin", .name = "Минимально возможный I ХХ дв.", .izm = "А", .val = 10.0, .min = 0, .max = 100},
+    {.id = "Imax", .name = "Максимально возможный I ХХ дв.", .izm = "А", .val = 30.0, .min = 0, .max = 100},
+    {.id = "Iconst", .name = "Стабильность I ХХ двигателя", .izm = "+-А", .val = 1.0, .min = 0, .max = 100},
+    //{.id = "Iporog", .name = "Порог тока при врезке", .izm = "А", .val = 21.0, .min = 0, .max = 100},
+    {.id = "Isetmin", .name = "Минимум I задание", .izm = "А", .val = 18.0, .min = 0, .max = 100},
+    {.id = "Isetmax", .name = "Максимум I задание", .izm = "А", .val = 30.0, .min = 0, .max = 100},
     {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3087, .min = 0, .max = 10000},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
     {.id = "pidintMax", .name = "PID Intergal maximum", .izm = "", .val = 255, .min = -999999, .max = 999999},
-    {.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = -255, .min = -999999, .max = 999999},
+    {.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = 0, .min = -999999, .max = 999999},
     {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 999999},
     {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 999999},
 };
@@ -134,7 +139,9 @@ esp_err_t set_menu_val_by_id(const char *id, float value)
                 ESP_LOGD("NVS", "Write  \"%s\" : \"%f\"", menu[i].id, value);
                 err = nvs_set_blob(my_handle, id, &value, sizeof(float));
                 menu[i].val = value;
-                nvs_close(my_handle);
+                vTaskDelay(50 / portTICK_PERIOD_MS);
+                nvs_commit(my_handle);
+                parameters_changed = i;
             }
             break;
         }
@@ -177,11 +184,11 @@ int get_menu_html(char *buf)
 
         if (strlen(menu[index].name) > 0)
         {
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%f\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
         }
         else // hidden
         {
-            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%f\">", menu[index].id, menu[index].id, menu[index].val);
+            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%g\">", menu[index].id, menu[index].id, menu[index].val);
         }
 
         index++;
@@ -249,7 +256,7 @@ void console_task(void *arg)
                     for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
                     {
                         if (strlen(menu[i].name) > 0)
-                            ESP_LOGI("menu", "%2i. %s: %f %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
+                            ESP_LOGI("menu", "%2i. %s: %g %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
                     }
 
                     ESP_LOGI("menu", "54. FreeRTOS INFO");
@@ -258,8 +265,8 @@ void console_task(void *arg)
                     break;
                 case 54: // FreeRTOS INFO
                     ESP_LOGI("info", "Minimum free memory: %lu bytes", esp_get_minimum_free_heap_size());
-                    // ESP_LOGI("wifi_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleWifi));
-                    // ESP_LOGI("adc_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleADC));
+                    ESP_LOGI("wifi_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleWifi));
+                    ESP_LOGI("adc_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleADC));
                     /// ESP_LOGI("modem_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleNB));
                     // ESP_LOGI("console_task", "Task watermark: %d bytes", uxTaskGetStackHighWaterMark(xHandleConsole));
                     /*
@@ -276,12 +283,12 @@ void console_task(void *arg)
                     if ((int)n > 0 && (int)n <= sizeof(menu) / sizeof(menu_t))
                     {
                         ESP_LOGI("menu", "-------------------------------------------");
-                        ESP_LOGI("menu", "%2i. %s: %f %s. Введите новое значение: ", (int)n, menu[(int)n - 1].name, menu[(int)n - 1].val, menu[(int)n - 1].izm);
+                        ESP_LOGI("menu", "%2i. %s: %g %s. Введите новое значение: ", (int)n, menu[(int)n - 1].name, menu[(int)n - 1].val, menu[(int)n - 1].izm);
                         ESP_LOGI("menu", "-------------------------------------------");
                     }
                     else
                     {
-                        ESP_LOGE("menu", "Err: %f", n);
+                        ESP_LOGE("menu", "Err: %g", n);
                     }
                     break;
                 }
@@ -313,9 +320,10 @@ void console_task(void *arg)
                             }
                         }
 
+                        vTaskDelay(50 / portTICK_PERIOD_MS);
                         parameters_changed = selected_menu_id;
 
-                        //ESP_LOGD(TAG, "Committing updates in NVS ... ");
+                        // ESP_LOGD(TAG, "Committing updates in NVS ... ");
                         err = nvs_commit(my_handle);
                         if (err != ESP_OK)
                             ESP_LOGE(TAG, "Committing updates in NVS ... - Failed!");
@@ -373,7 +381,7 @@ blink_step_t const *led_indicator_blink_lists[] = {
     [BLINK_MAX] = NULL,
 };
 
-int key_dir = 0;
+int key_mode = 0;
 #define KEY_TIMEOUT (5 * 1000 / 20)
 int key_timeout = KEY_TIMEOUT;
 int setup_curr = 25;
@@ -386,50 +394,28 @@ static void button_event_cb(void *arg, void *data)
     switch (event)
     {
     case BUTTON_SINGLE_CLICK:
-        if (key_dir != 1)
+        if (key_mode != 1)
         {
-            key_dir = 1;
-            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+            key_mode = 1;
             ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
+
+            parameters_changed = -1; 
         }
         else
         {
-            key_dir = -1;
+            key_mode = -1;
             ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
-            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP2));
+            if (xHandleWifi)
+                xTaskNotify(xHandleWifi, NOTYFY_WIFI_STOP, eSetValueWithOverwrite);
         }
-
-        ESP_LOGI(TAG, "Set DIR; %d", key_dir);
 
         key_timeout = KEY_TIMEOUT;
         break;
     case BUTTON_LONG_PRESS_START:
-        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
-        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
-        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 1));
         break;
     case BUTTON_LONG_PRESS_HOLD:
-        setup_cntr++;
-        key_timeout = KEY_TIMEOUT;
-        if (setup_cntr % 20 == 0)
-        {
-            setup_curr += key_dir;
-
-            ESP_LOGI(TAG, "Set; %i", setup_curr);
-        }
         break;
     case BUTTON_LONG_PRESS_UP:
-        key_timeout = KEY_TIMEOUT;
-        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
-
-        if (key_dir == 1)
-        {
-            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
-        }
-        if (key_dir == -1)
-        {
-            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP2));
-        }
         break;
     default:
         break;
@@ -453,9 +439,6 @@ void btn_task(void *arg)
     ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, NULL, button_event_cb, NULL);
     ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_HOLD, NULL, button_event_cb, NULL);
     ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_UP, NULL, button_event_cb, NULL);
-    // 1 - режим настройки, 2 - изменение настройки
-    int state = 0;
-    int led_blink = 0;
 
     led_indicator_gpio_config_t led_indicator_gpio_config = {
         .is_active_level_high = 1,
@@ -475,18 +458,16 @@ void btn_task(void *arg)
     while (1)
     {
         // timeout key mode
-        if (key_dir != 0)
+        if (key_mode != 0)
         {
-            //xQueueOverwrite(xQueueDisplay, &setup_curr);
-
-            if (key_timeout-- <= 0)
-            {
-                ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
-                ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP2));
-                ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
-
-                key_dir = 0;
-            }
+            // xQueueOverwrite(xQueueDisplay, &setup_curr);
+        /*
+                    if (key_timeout-- <= 0)
+                    {
+                        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+                        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
+                    }
+                */
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);
     }

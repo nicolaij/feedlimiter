@@ -38,6 +38,18 @@ typedef struct
     bool dots;
 } displ_t;
 
+extern TaskHandle_t xHandleWifi;
+extern TaskHandle_t xHandleADC;
+extern TaskHandle_t xHandleConsole;
+
+#define NOTYFY_WIFI BIT0
+#define NOTYFY_WIFI_STOP BIT1
+#define NOTYFY_WIFI_ESPNOW BIT2
+#define NOTYFY_WIFI_REBOOT BIT3
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 esp_err_t init_nvs();
 esp_err_t read_nvs_menu();
 
@@ -48,5 +60,8 @@ void btn_task(void *arg);
 void console_task(void *arg);
 void adc_task(void *arg);
 void displ_task(void *arg);
+void wifi_task(void *arg);
+
+int get_menu_html(char *buf);
 
 #endif

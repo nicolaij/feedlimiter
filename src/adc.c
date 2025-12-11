@@ -24,8 +24,8 @@
 
 #include "hal/adc_ll.h"
 
-#define POINTS10 100 // измерений каждых 10 мс
-#define CYCLE 300    // ms
+#define POINTS10 200 // измерений каждых 20 мс
+#define CYCLE 200    // ms
 
 extern int setup_current_changed;
 
@@ -33,7 +33,7 @@ static TaskHandle_t s_task_handle;
 
 extern QueueHandle_t xQueueDisplay;
 
-extern int key_dir;
+extern int key_mode;
 
 extern int parameters_changed;
 
@@ -42,9 +42,8 @@ dac_oneshot_handle_t chan1_handle;
 
 static const char *TAG = "adc";
 
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MEDIAN(a) (MAX(a[0], a[1]) == MAX(a[1], a[2])) ? MAX(a[0], a[2]) : MAX(a[1], MIN(a[0], a[2]))
+#define INRANGE(value, min, max) (value < max) && (value > min)
 
 static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const adc_continuous_evt_data_t *edata, void *user_data)
 {
@@ -58,13 +57,13 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 static void continuous_adc_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
-        .max_store_buf_size = POINTS10 * 2 * 2 * 2 * 2,
-        .conv_frame_size = POINTS10 * 2 * 2,
+        .max_store_buf_size = POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES * 2,
+        .conv_frame_size = POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 20000,
+        .sample_freq_hz = 20000 * 3,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -73,7 +72,7 @@ static void continuous_adc_init()
     dig_cfg.pattern_num = 2;
 
     adc_pattern[0].atten = ADC_ATTEN_DB_12;
-    adc_pattern[0].channel = ADC_CHANNEL;
+    adc_pattern[0].channel = ADC_CHANNEL_5;
     adc_pattern[0].unit = ADC_UNIT_1;
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
@@ -95,7 +94,7 @@ void adc_task(void *arg)
 {
     esp_err_t ret;
     uint32_t ret_num = 0;
-    uint8_t result[POINTS10 * 2 * 2] = {0};
+    uint8_t result[POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES] = {0};
     int median_filter_current[3];
     uint8_t median_filter_current_fill = 0;
     int median_filter_setup[3];
@@ -103,25 +102,27 @@ void adc_task(void *arg)
     int digital_filter;
 
     int current_offset = 0;
-    bool current_offset_set = false;
+    int current_offset_set = 5;
+    float current_offset_sum = 0;
 
-    int operate_count = 0;
-    int operate_sum = 0;
+    int cycle_count = 0;
+    int current_sum_rms = 0;
+    int current_sum = 0;
 
     int avg_setup_sum = 0;
 
     int run_stage = 0;
 
-    float currents[UINT8_MAX];
+    int currents[UINT8_MAX]; // in mA
     uint8_t currents_cnt = 0;
 
-    float current_xx = 0;
+    int current_xx = 0; // in mA
 
     int err_count = 0;
 
-    vTaskDelay(1);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-        gpio_config_t io_conf = {};
+    gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_POSEDGE;
     io_conf.pin_bit_mask = BIT64(GPIO_NUM_15);
     // set as input mode
@@ -130,17 +131,20 @@ void adc_task(void *arg)
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-
     s_task_handle = xTaskGetCurrentTaskHandle();
 
     float k_calc = get_menu_val_by_id("Kcalc");
     float Isetmin = get_menu_val_by_id("Isetmin");
     float Isetmax = get_menu_val_by_id("Isetmax");
-    float Iporog = get_menu_val_by_id("Iporog");
-
+    // float Iporog = get_menu_val_by_id("Iporog");
     float ADCmax = get_menu_val_by_id("ADCmax");
 
-    // float setup_current = get_menu_val_by_id("elcurrent");
+    current_offset = get_menu_val_by_id("offsetADC");
+
+    float Imin = get_menu_val_by_id("Imin");
+    float Imax = get_menu_val_by_id("Imax");
+    float Iconst = get_menu_val_by_id("Iconst");
+    // float Iporog = Isetmin + Iconst + 1.0f;
 
     displ_t displ_data;
 
@@ -163,10 +167,10 @@ void adc_task(void *arg)
         .on_conv_done = s_conv_done_cb,
     };
 
-    ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
+    // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
 
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
-    //adc_ll_digi_set_convert_limit_num(2);
+    adc_ll_digi_set_convert_limit_num(2);
 
     int64_t time1 = esp_timer_get_time();
     int64_t time2 = esp_timer_get_time();
@@ -178,15 +182,23 @@ void adc_task(void *arg)
         // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         adc_digi_output_data_t *p = (void *)result;
-        int sum_current = 0;
-        int count_current = 0;
-        int sum_setup = 0;
-        int count_setup = 0;
+        int current_adc_square = 0;
+        int current_adc_sum = 0;
+        int current_adc_count = 0;
+        int setup_adc_sum = 0;
+        int setup_adc_count = 0;
 
-        ret = adc_continuous_read(adc_handle, result, POINTS10 * 2 * 2, &ret_num, ADC_MAX_DELAY);
+        ret = adc_continuous_read(adc_handle, result, POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES, &ret_num, ADC_MAX_DELAY);
         if (ret == ESP_ERR_TIMEOUT)
         {
             vTaskDelay(1);
+            continue;
+        }
+
+        if (ret == ESP_ERR_INVALID_STATE)
+        {
+            dac_oneshot_output_voltage(chan1_handle, 0); // stop
+            vTaskDelay(1000);
             continue;
         }
 
@@ -194,7 +206,7 @@ void adc_task(void *arg)
         {
             switch (p->type1.channel)
             {
-            case ADC_CHANNEL:
+            case ADC_CHANNEL_5:
                 median_filter_current[median_filter_current_fill % 3] = p->type1.data;
                 median_filter_current_fill++;
 
@@ -209,8 +221,9 @@ void adc_task(void *arg)
                     digital_filter = p->type1.data;
                 }
 
-                sum_current += digital_filter;
-                count_current++;
+                current_adc_square += (digital_filter - current_offset) * (digital_filter - current_offset);
+                current_adc_sum += digital_filter;
+                current_adc_count++;
                 break;
 
             case ADC_CHANNEL_0:
@@ -228,8 +241,10 @@ void adc_task(void *arg)
                     digital_filter = p->type1.data;
                 }
 
-                sum_setup += digital_filter;
-                count_setup++;
+                setup_adc_sum += digital_filter;
+                setup_adc_count++;
+                break;
+
             default:
                 err_count++;
                 break;
@@ -238,43 +253,42 @@ void adc_task(void *arg)
         }
 
         // time2 = esp_timer_get_time();
-        // ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d, %x", time2 - time1, count_current, ret_num, ret);
+        // ESP_LOGD("main", "time: %8lld; cnt: %d; ret: %d, %x", time2 - time1, current_adc_count, ret_num, ret);
         // continue;
 
-        // обработка 
-        if (count_current > 0)
+        // обработка
+        if (current_adc_count > 0)
         {
-            int avg = sum_current / count_current - current_offset;
-            int avg_setup = sum_setup / count_setup;
+            int avgc = roundf(sqrtf(current_adc_square / current_adc_count));
 
-            operate_sum += avg * avg;
-            avg_setup_sum += avg_setup;
-            operate_count++;
+            current_sum_rms += avgc;
+            current_sum += (current_adc_sum / current_adc_count);
+            avg_setup_sum += (setup_adc_sum / setup_adc_count);
+            cycle_count++;
 
-            if (operate_count < (CYCLE / 10))
+            if (cycle_count < (CYCLE / 20))
             {
                 continue;
             }
 
-            float avgo = sqrtf((float)operate_sum / operate_count);
-            float avgs = avg_setup_sum / operate_count;
+            float avg_current = current_sum_rms / cycle_count;
+            int avg_setup = avg_setup_sum / cycle_count;
+            int offset = current_sum / cycle_count;
 
-            operate_count = 0;
-            operate_sum = 0;
+            cycle_count = 0;
+            current_sum_rms = 0;
+            current_sum = 0;
             avg_setup_sum = 0;
 
-            if (!current_offset_set)
+            if (current_offset == 0)
             {
-                current_offset = avgo;
-                current_offset_set = true;
-
-                ESP_LOGI("main", "ADC0 offset: %f", avgo);
-
                 run_stage = 1;
+                current_offset = offset;
+                ESP_LOGW("main", "ADC current offset: %d", current_offset);
                 continue;
             }
 
-            if (parameters_changed)
+            if (parameters_changed != 0)
             {
                 pid_ctrl_parameter_t params = {.cal_type = PID_CAL_TYPE_POSITIONAL,
                                                .kp = get_menu_val_by_id("pidP"),
@@ -290,33 +304,55 @@ void adc_task(void *arg)
                 k_calc = get_menu_val_by_id("Kcalc");
                 Isetmin = get_menu_val_by_id("Isetmin");
                 Isetmax = get_menu_val_by_id("Isetmax");
-                Iporog = get_menu_val_by_id("Iporog");
+                // Iporog = get_menu_val_by_id("Iporog");
                 ADCmax = get_menu_val_by_id("ADCmax");
+                Imin = get_menu_val_by_id("Imin");
+                Imax = get_menu_val_by_id("Imax");
+                Iconst = get_menu_val_by_id("Iconst");
+
+                if (parameters_changed == -1)
+                {
+                    ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
+
+                    if (xHandleWifi)
+                        xTaskNotifyGive(xHandleWifi); // включаем WiFi
+
+                    displ_data.curr = 0;
+                    displ_data.dots = false;
+                    displ_data.set = 0;
+
+                    xQueueSend(xQueueDisplay, &displ_data, 100);
+                }
                 parameters_changed = 0;
             }
 
-            float current = avgo * k_calc; // in A
-
-            currents[currents_cnt] = current;
+            float current = avg_current * k_calc; // in A
+            currents[currents_cnt] = (current * 1000.0f);
 
             if (run_stage == 5)
             {
-                if (currents[currents_cnt] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 1)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 2)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 3)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 4)] < (current_xx + 1.0) && currents[(uint8_t)(currents_cnt - 5)] < (current_xx + 1.0))
+                int xx = current_xx + Iconst * 1000.0f;
+                if (currents[currents_cnt] < xx &&
+                    currents[(uint8_t)(currents_cnt - 1)] < xx &&
+                    currents[(uint8_t)(currents_cnt - 2)] < xx &&
+                    currents[(uint8_t)(currents_cnt - 3)] < xx &&
+                    currents[(uint8_t)(currents_cnt - 4)] < xx)
                 {
                     run_stage = 4;
                 }
             }
 
-            if (run_stage == 4) // врезка
+            if (run_stage == 4) // Хол Ход
             {
-                if (current > current_xx + 2.0)
+                int xx = current_xx + Iconst * 1000.0f;
+                if (currents[currents_cnt] > xx) // врезка
                 {
                     run_stage = 5;
-
-                    pid_handle->integral_err = (avgs / ADCmax * UINT8_MAX) / pid_handle->Ki;
+                    pid_handle->integral_err = (avg_setup / ADCmax * UINT8_MAX) / pid_handle->Ki;
                 }
 
-                if (currents[currents_cnt] < (2.0) && currents[(uint8_t)(currents_cnt - 1)] < (2.0) && currents[(uint8_t)(currents_cnt - 2)] < (2.0))
+                int xxm = Imin - Iconst * 1000.0f;
+                if (currents[currents_cnt] < xxm && currents[(uint8_t)(currents_cnt - 1)] < xxm && currents[(uint8_t)(currents_cnt - 2)] < xxm) // ВЫКЛ
                 {
                     run_stage = 1;
                 }
@@ -324,41 +360,46 @@ void adc_task(void *arg)
 
             if (run_stage == 3) // фиксируем ХХ
             {
-                current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)] + currents[(uint8_t)(currents_cnt - 2)]) / 3;
-                Isetmin = current_xx;
-                Iporog = current_xx + 2;
+                current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)]) / 2;
+                ESP_LOGI("main", "XX: %d", current_xx);
+                Isetmin = (float)current_xx / 1000.0f;
+                // Iporog = Isetmin + Iconst + 1.0f;
                 run_stage = 4;
             }
 
-            if (run_stage == 2) // ждем стабилизации тока
+            if (run_stage == 2) // ждем стабилизации тока +-1A
             {
-                if (currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 1)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 1)] - 1 && currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 2)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 2)] - 1 && currents[currents_cnt] <= currents[(uint8_t)(currents_cnt - 3)] + 1 && currents[currents_cnt] >= currents[(uint8_t)(currents_cnt - 3)] - 1)
+                int offs = Iconst * 1000.0f;
+                if (INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
+                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 2)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
+                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 3)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
+                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 4)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
+                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 5)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
+                    INRANGE(current, Imin, Imax))
                 {
-                    if (currents[currents_cnt] < Iporog)
-                        run_stage = 3;
+                    run_stage = 3;
                 }
             }
 
-            currents_cnt++;
-
             if (run_stage == 1) // ловим пуск пилы
             {
-                if (current > 50.0)
+                int px = (Imax + Iconst) * 1000.0f;
+                if (currents[currents_cnt] > px && currents[(uint8_t)(currents_cnt - 1)] > px)
                     run_stage = 2;
             }
 
             if (gpio_get_level(GPIO_NUM_15) == 1)
                 run_stage = 1;
 
-            float setup_current = (Isetmin + avgs / ADCmax * (Isetmax - Isetmin));
-            if (setup_current < Iporog)
-                setup_current = Iporog;
+            float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
+            if (setup_current < Isetmin + Iconst)
+                setup_current = Isetmin + Iconst;
 
             displ_data.curr = current;
             displ_data.dots = true;
             displ_data.set = setup_current;
 
-            // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avgo, k_calc);
+            // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avg_current, k_calc);
 
             xQueueSend(xQueueDisplay, &displ_data, 0);
 
@@ -366,7 +407,7 @@ void adc_task(void *arg)
             static float ret_result = 0;
             float input_error = setup_current - current;
             // float intg = pid_handle->integral_err;
-            pid_handle->max_output = avgs / ADCmax * UINT8_MAX * 1.1;
+            pid_handle->max_output = avg_setup / ADCmax * UINT8_MAX + (UINT8_MAX * 10 / 100);
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             dac1 = (int)ret_result;
@@ -378,7 +419,7 @@ void adc_task(void *arg)
 
             if (run_stage != 5)
             {
-                dac1 = avgs / ADCmax * UINT8_MAX;
+                dac1 = avg_setup / ADCmax * UINT8_MAX;
                 pid_reset_ctrl_block(pid_handle);
             }
 
@@ -386,10 +427,11 @@ void adc_task(void *arg)
 
             time2 = esp_timer_get_time();
 
-            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (%4.0f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_15), run_stage, time2 - time1, current, avgo, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
-            printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
+            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (%d) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_15), run_stage, time2 - time1, current, offset, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            // printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
 
             time1 = time2;
+            currents_cnt++;
         }
     }
 }
