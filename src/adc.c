@@ -111,7 +111,7 @@ void adc_task(void *arg)
 
     int avg_setup_sum = 0;
 
-    int run_stage = 0;
+    int run_stage = 1;
 
     int currents[UINT8_MAX]; // in mA
     uint8_t currents_cnt = 0;
