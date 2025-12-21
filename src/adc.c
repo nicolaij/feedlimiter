@@ -24,7 +24,7 @@
 
 #include "hal/adc_ll.h"
 
-#define POINTS10 200 // измерений каждых 20 мс
+#define POINTS10 200 // измерений на канал каждых 20 мс
 #define CYCLE 200    // ms
 
 extern int setup_current_changed;
@@ -120,15 +120,22 @@ void adc_task(void *arg)
 
     int err_count = 0;
 
+    int sw1 = 0;
+
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.pin_bit_mask = BIT64(GPIO_NUM_15);
     // set as input mode
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    io_conf.pin_bit_mask = BIT64(GPIO_NUM_13);
+    // set as input mode
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
     s_task_handle = xTaskGetCurrentTaskHandle();
@@ -174,6 +181,8 @@ void adc_task(void *arg)
 
     int64_t time1 = esp_timer_get_time();
     int64_t time2 = esp_timer_get_time();
+
+    float input_error = 0;
 
     while (1)
     {
@@ -329,6 +338,12 @@ void adc_task(void *arg)
             float current = avg_current * k_calc; // in A
             currents[currents_cnt] = (current * 1000.0f);
 
+            float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
+            if (setup_current < Isetmin + Iconst)
+                setup_current = Isetmin + Iconst;
+
+            input_error = setup_current - current;
+
             if (run_stage == 5)
             {
                 int xx = current_xx + Iconst * 1000.0f;
@@ -348,14 +363,33 @@ void adc_task(void *arg)
                 if (currents[currents_cnt] > xx) // врезка
                 {
                     run_stage = 5;
-                    pid_handle->integral_err = (avg_setup / ADCmax * UINT8_MAX) / pid_handle->Ki;
+                    pid_handle->integral_err = (avg_setup * UINT8_MAX / ADCmax - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                 }
 
-                int xxm = Imin - Iconst * 1000.0f;
+                int xxm = (Imin - Iconst) * 1000.0f;
                 if (currents[currents_cnt] < xxm && currents[(uint8_t)(currents_cnt - 1)] < xxm && currents[(uint8_t)(currents_cnt - 2)] < xxm) // ВЫКЛ
                 {
                     run_stage = 1;
                 }
+
+                // ESP_LOGI("I", "%i - %i",xx,xxm);
+            }
+
+            // подача вперед
+            if (gpio_get_level(GPIO_NUM_15) == 0)
+            {
+                if (sw1 <= 0)
+                {
+                    sw1 = 1;
+
+                    if (gpio_get_level(GPIO_NUM_13) == 0)
+                        run_stage = 3;
+                }
+            }
+            else
+            {
+                if (sw1 > 0)
+                    sw1 = -1;
             }
 
             if (run_stage == 3) // фиксируем ХХ
@@ -386,14 +420,13 @@ void adc_task(void *arg)
                 int px = (Imax + Iconst) * 1000.0f;
                 if (currents[currents_cnt] > px && currents[(uint8_t)(currents_cnt - 1)] > px)
                     run_stage = 2;
-            }
 
-            if (gpio_get_level(GPIO_NUM_15) == 1)
+                // ESP_LOGD("main", "stage: %i Current: %i, %i, %i", run_stage, currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)], currents[(uint8_t)(currents_cnt - 2)]);
+            };
+
+            // блокировка
+            if (gpio_get_level(GPIO_NUM_13) == 1)
                 run_stage = 1;
-
-            float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
-            if (setup_current < Isetmin + Iconst)
-                setup_current = Isetmin + Iconst;
 
             displ_data.curr = current;
             displ_data.dots = true;
@@ -405,9 +438,9 @@ void adc_task(void *arg)
 
             uint8_t dac1 = UINT8_MAX;
             static float ret_result = 0;
-            float input_error = setup_current - current;
             // float intg = pid_handle->integral_err;
-            pid_handle->max_output = avg_setup / ADCmax * UINT8_MAX + (UINT8_MAX * 10 / 100);
+            pid_handle->max_output = avg_setup * UINT8_MAX / ADCmax + (UINT8_MAX * 20 / 100);
+            pid_handle->min_output = avg_setup * UINT8_MAX / ADCmax / 5;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             dac1 = (int)ret_result;
@@ -419,7 +452,7 @@ void adc_task(void *arg)
 
             if (run_stage != 5)
             {
-                dac1 = avg_setup / ADCmax * UINT8_MAX;
+                dac1 = avg_setup * UINT8_MAX / ADCmax;
                 pid_reset_ctrl_block(pid_handle);
             }
 
@@ -427,7 +460,7 @@ void adc_task(void *arg)
 
             time2 = esp_timer_get_time();
 
-            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (%d) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_15), run_stage, time2 - time1, current, offset, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (set: %.1f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_13), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
             // printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
 
             time1 = time2;
