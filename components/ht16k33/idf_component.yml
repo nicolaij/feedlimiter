@@ -1,0 +1,30 @@
+dependencies:
+  esp-idf-lib/i2cdev:
+    version: '*'
+description: HT16K33 LED controller driver
+discussion: https://github.com/esp-idf-lib/core/discussions
+documentation: https://esp-idf-lib.github.io/ht16k33/
+files:
+  exclude:
+  - docs/**/*
+issues: https://github.com/esp-idf-lib/ht16k33/issues
+license: MIT
+maintainers:
+- Timofei Korostelev (@chudsaviet) <timofei_public@dranik.dev>
+repository: git://github.com/esp-idf-lib/ht16k33.git
+repository_info:
+  commit_sha: 673135bcf2fd0079cdb8b2ebd4119453b6d847b7
+  path: .
+targets:
+- esp32
+- esp32c2
+- esp32c3
+- esp32c5
+- esp32c6
+- esp32c61
+- esp32h2
+- esp32p4
+- esp32s2
+- esp32s3
+url: https://github.com/esp-idf-lib/core
+version: 1.0.3

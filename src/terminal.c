@@ -31,7 +31,7 @@ menu_t menu[] = {
     /*1*/ {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
     {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
     {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.000001, .min = 0, .max = 999999},
-    //{.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
+    {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
     {.id = "Imin", .name = "Минимально возможный I ХХ дв.", .izm = "А", .val = 10.0, .min = 0, .max = 100},
     {.id = "Imax", .name = "Максимально возможный I ХХ дв.", .izm = "А", .val = 30.0, .min = 0, .max = 100},
     {.id = "Iconst", .name = "Стабильность I ХХ двигателя", .izm = "+-А", .val = 1.0, .min = 0, .max = 100},
@@ -259,9 +259,21 @@ void console_task(void *arg)
                             ESP_LOGI("menu", "%2i. %s: %g %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
                     }
 
+                    ESP_LOGI("menu", "51. DEBUG! DAC1,DAC2 = 100%");
+                    ESP_LOGI("menu", "52. DEBUG! DAC1,DAC2 = 50%");
+                    ESP_LOGI("menu", "53. DEBUG! DAC1,DAC2 = 0%");
                     ESP_LOGI("menu", "54. FreeRTOS INFO");
                     ESP_LOGI("menu", "55. Reboot");
                     ESP_LOGI("menu", "-------------------------------------------");
+                    break;
+                case 51: // all adc = 255
+                    run_stage = 100;
+                    break;
+                case 52: // all adc  = 127
+                    run_stage = 101;
+                    break;
+                case 53: // all adc  = 0
+                    run_stage = 102;
                     break;
                 case 54: // FreeRTOS INFO
                     ESP_LOGI("info", "Minimum free memory: %lu bytes", esp_get_minimum_free_heap_size());
@@ -399,12 +411,16 @@ static void button_event_cb(void *arg, void *data)
             key_mode = 1;
             ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
 
-            parameters_changed = -1; 
+            // parameters_changed = -1;
+
+            if (xHandleWifi)
+                xTaskNotifyGive(xHandleWifi); // включаем WiFi
         }
         else
         {
             key_mode = -1;
             ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+
             if (xHandleWifi)
                 xTaskNotify(xHandleWifi, NOTYFY_WIFI_STOP, eSetValueWithOverwrite);
         }
@@ -461,13 +477,13 @@ void btn_task(void *arg)
         if (key_mode != 0)
         {
             // xQueueOverwrite(xQueueDisplay, &setup_curr);
-        /*
-                    if (key_timeout-- <= 0)
-                    {
-                        ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
-                        ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
-                    }
-                */
+            /*
+                        if (key_timeout-- <= 0)
+                        {
+                            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+                            ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
+                        }
+                    */
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);
     }

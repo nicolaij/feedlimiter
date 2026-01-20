@@ -17,7 +17,10 @@
 
 #define LED_PIN GPIO_NUM_2
 #define BTN_PIN GPIO_NUM_0
-#define ADC_CHANNEL ADC_CHANNEL_5
+#define FEED_FORWARD_PIN GPIO_NUM_15
+#define DISABLE_PIN GPIO_NUM_4
+#define ADC_CHANNEL_CURRENT ADC_CHANNEL_5
+#define ADC_CHANNEL_SET ADC_CHANNEL_0
 #define TM1637_CLK_PIN GPIO_NUM_22
 #define TM1637_DIO_PIN GPIO_NUM_21
 
@@ -41,6 +44,8 @@ typedef struct
 extern TaskHandle_t xHandleWifi;
 extern TaskHandle_t xHandleADC;
 extern TaskHandle_t xHandleConsole;
+
+extern int run_stage;
 
 #define NOTYFY_WIFI BIT0
 #define NOTYFY_WIFI_STOP BIT1

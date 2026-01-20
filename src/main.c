@@ -27,7 +27,7 @@ void app_main()
     xTaskCreate(adc_task, "adc_task", 1024 * 8, NULL, configMAX_PRIORITIES - 10, &xHandleADC);
     xTaskCreate(btn_task, "btn_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
     xTaskCreate(console_task, "console_task", 1024 * 4, NULL, configMAX_PRIORITIES - 16, &xHandleConsole);
-    xTaskCreate(displ_task, "displ_task", 1024 * 4, NULL, configMAX_PRIORITIES - 17, NULL);
+    xTaskCreate(displ_task, "displ_task", 1024 * 6, NULL, configMAX_PRIORITIES - 17, NULL);
 
     xTaskCreate(wifi_task, "wifi_task", 1024 * 3, NULL, configMAX_PRIORITIES - 12, &xHandleWifi);
 

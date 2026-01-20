@@ -21,6 +21,9 @@
 #include "pid_ctrl.h"
 
 #include "tm1637.h"
+#include <ht16k33.h>
+
+#include "i2cdev.h"
 
 #include "hal/adc_ll.h"
 
@@ -38,7 +41,11 @@ extern int key_mode;
 extern int parameters_changed;
 
 adc_continuous_handle_t adc_handle = NULL;
+
 dac_oneshot_handle_t chan1_handle;
+dac_oneshot_handle_t chan2_handle;
+
+int run_stage = 1;
 
 static const char *TAG = "adc";
 
@@ -72,12 +79,12 @@ static void continuous_adc_init()
     dig_cfg.pattern_num = 2;
 
     adc_pattern[0].atten = ADC_ATTEN_DB_12;
-    adc_pattern[0].channel = ADC_CHANNEL_5;
+    adc_pattern[0].channel = ADC_CHANNEL_CURRENT;
     adc_pattern[0].unit = ADC_UNIT_1;
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     adc_pattern[1].atten = ADC_ATTEN_DB_12;
-    adc_pattern[1].channel = ADC_CHANNEL_0;
+    adc_pattern[1].channel = ADC_CHANNEL_SET;
     adc_pattern[1].unit = ADC_UNIT_1;
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
@@ -88,6 +95,11 @@ static void continuous_adc_init()
         .chan_id = DAC_CHAN_0,
     };
     ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan1_cfg, &chan1_handle));
+
+    dac_oneshot_config_t chan2_cfg = {
+        .chan_id = DAC_CHAN_1,
+    };
+    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan2_cfg, &chan2_handle));
 }
 
 void adc_task(void *arg)
@@ -111,9 +123,7 @@ void adc_task(void *arg)
 
     int avg_setup_sum = 0;
 
-    int run_stage = 1;
-
-    int currents[UINT8_MAX]; // in mA
+    int currents[UINT8_MAX + 1]; // in mA
     uint8_t currents_cnt = 0;
 
     int current_xx = 0; // in mA
@@ -126,21 +136,17 @@ void adc_task(void *arg)
 
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.pin_bit_mask = BIT64(GPIO_NUM_15);
+    io_conf.pin_bit_mask = BIT64(FEED_FORWARD_PIN) | BIT64(DISABLE_PIN);
     // set as input mode
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    io_conf.pin_bit_mask = BIT64(GPIO_NUM_13);
-    // set as input mode
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-
     s_task_handle = xTaskGetCurrentTaskHandle();
 
     float k_calc = get_menu_val_by_id("Kcalc");
+    float k_display = get_menu_val_by_id("Kdispl");
     float Isetmin = get_menu_val_by_id("Isetmin");
     float Isetmax = get_menu_val_by_id("Isetmax");
     // float Iporog = get_menu_val_by_id("Iporog");
@@ -207,7 +213,8 @@ void adc_task(void *arg)
         if (ret == ESP_ERR_INVALID_STATE)
         {
             dac_oneshot_output_voltage(chan1_handle, 0); // stop
-            vTaskDelay(1000);
+            dac_oneshot_output_voltage(chan2_handle, 0);
+            vTaskDelay(portMAX_DELAY);
             continue;
         }
 
@@ -215,7 +222,7 @@ void adc_task(void *arg)
         {
             switch (p->type1.channel)
             {
-            case ADC_CHANNEL_5:
+            case ADC_CHANNEL_CURRENT: // измерения тока
                 median_filter_current[median_filter_current_fill % 3] = p->type1.data;
                 median_filter_current_fill++;
 
@@ -235,7 +242,7 @@ void adc_task(void *arg)
                 current_adc_count++;
                 break;
 
-            case ADC_CHANNEL_0:
+            case ADC_CHANNEL_SET: // задание тока
                 median_filter_setup[median_filter_setup_fill % 3] = p->type1.data;
                 median_filter_setup_fill++;
 
@@ -311,6 +318,7 @@ void adc_task(void *arg)
                 pid_update_parameters(pid_handle, &params);
 
                 k_calc = get_menu_val_by_id("Kcalc");
+                k_display = get_menu_val_by_id("Kdispl");
                 Isetmin = get_menu_val_by_id("Isetmin");
                 Isetmax = get_menu_val_by_id("Isetmax");
                 // Iporog = get_menu_val_by_id("Iporog");
@@ -318,20 +326,21 @@ void adc_task(void *arg)
                 Imin = get_menu_val_by_id("Imin");
                 Imax = get_menu_val_by_id("Imax");
                 Iconst = get_menu_val_by_id("Iconst");
+                /*
+                                if (parameters_changed == -1)
+                                {
+                                    ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
 
-                if (parameters_changed == -1)
-                {
-                    ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
+                                    if (xHandleWifi)
+                                        xTaskNotifyGive(xHandleWifi); // включаем WiFi
 
-                    if (xHandleWifi)
-                        xTaskNotifyGive(xHandleWifi); // включаем WiFi
+                                    displ_data.curr = 0;
+                                    displ_data.dots = false;
+                                    displ_data.set = 0;
 
-                    displ_data.curr = 0;
-                    displ_data.dots = false;
-                    displ_data.set = 0;
-
-                    xQueueSend(xQueueDisplay, &displ_data, 100);
-                }
+                                    xQueueSend(xQueueDisplay, &displ_data, 100);
+                                }
+                */
                 parameters_changed = 0;
             }
 
@@ -376,13 +385,13 @@ void adc_task(void *arg)
             }
 
             // подача вперед
-            if (gpio_get_level(GPIO_NUM_15) == 0)
+            if (gpio_get_level(FEED_FORWARD_PIN) == 0)
             {
                 if (sw1 <= 0)
                 {
                     sw1 = 1;
 
-                    if (gpio_get_level(GPIO_NUM_13) == 0)
+                    if (gpio_get_level(DISABLE_PIN) == 0)
                         run_stage = 3;
                 }
             }
@@ -424,19 +433,28 @@ void adc_task(void *arg)
                 // ESP_LOGD("main", "stage: %i Current: %i, %i, %i", run_stage, currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)], currents[(uint8_t)(currents_cnt - 2)]);
             };
 
-            // блокировка
-            if (gpio_get_level(GPIO_NUM_13) == 1)
-                run_stage = 1;
+            if (run_stage < 100)
+            {
+                if (gpio_get_level(DISABLE_PIN) == 1) // блокировка работы алгоритма
+                    run_stage = 1;
 
-            displ_data.curr = current;
-            displ_data.dots = true;
-            displ_data.set = setup_current;
+                displ_data.curr = current;
+                displ_data.dots = true;
+                displ_data.set = setup_current;
+            }
+            else // DEBUG
+            {
+                displ_data.curr = avg_setup / 100;
+                displ_data.dots = false;
+                displ_data.set = avg_setup % 100;
+            }
 
             // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avg_current, k_calc);
 
             xQueueSend(xQueueDisplay, &displ_data, 0);
 
-            uint8_t dac1 = UINT8_MAX;
+            uint8_t dac1 = 0;
+            uint8_t dac2 = 0;
             static float ret_result = 0;
             // float intg = pid_handle->integral_err;
             pid_handle->max_output = avg_setup * UINT8_MAX / ADCmax + (UINT8_MAX * 20 / 100);
@@ -452,11 +470,37 @@ void adc_task(void *arg)
 
             if (run_stage != 5)
             {
-                dac1 = avg_setup * UINT8_MAX / ADCmax;
+                if (avg_setup > ADCmax)
+                    dac1 = UINT8_MAX;
+                else
+                    dac1 = avg_setup * UINT8_MAX / ADCmax;
                 pid_reset_ctrl_block(pid_handle);
             }
 
+            if (k_display * current > UINT8_MAX)
+                dac2 = UINT8_MAX;
+            else
+                dac2 = k_display * current;
+
+            // для отладки
+            if (run_stage == 100)
+            {
+                dac1 = UINT8_MAX;
+                dac2 = UINT8_MAX;
+            }
+            else if (run_stage == 101)
+            {
+                dac1 = UINT8_MAX / 2;
+                dac2 = UINT8_MAX / 2;
+            }
+            else if (run_stage == 102)
+            {
+                dac1 = 0;
+                dac2 = 0;
+            }
+
             dac_oneshot_output_voltage(chan1_handle, dac1);
+            dac_oneshot_output_voltage(chan2_handle, dac2);
 
             time2 = esp_timer_get_time();
 
@@ -471,30 +515,126 @@ void adc_task(void *arg)
 
 void displ_task(void *arg)
 {
+    int display_type = 0;
+
+    ESP_ERROR_CHECK(i2cdev_init());
+
+    i2c_dev_t i2cdev;
+
+    uint16_t ht16data[4];
+
+    uint16_t digits_ht16[10] = {
+        0x003F, // 0
+        0x0006, // 1
+        0x00DB, // 2
+        0x00CF, // 3
+        0x00E6, // 4
+        0x00ED, // 5
+        0x00FD, // 6
+        0x0007, // 7
+        0x00FF, // 8
+        0x00EF  // 9
+    };
+
+    uint16_t symbols_ht16[] = {
+        0,
+        0x1201, // Т
+        0x04FD, // В
+        0x0039, // С
+        0x00F9, // Е
+        0x0C86, // А
+        0x00FC, // Ь
+        0x0536, // М
+        0x2d00, // X
+        0x0d00, // Y
+        0x4C36, // N.
+        0x00C0, // --
+        0x0037, // П
+        0x0C36, // И
+        0x0C06, // Л
+        0x003F, // О
+        0x00F3, // Р
+        0x2470, // K
+    };
+
+    esp_err_t ret;
+
+    if (display_type == 0)
+    {
+        ret = ht16k33_init_desc(&i2cdev, 0, GPIO_NUM_21, GPIO_NUM_22, HT16K33_DEFAULT_ADDR) | ht16k33_init(&i2cdev);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to initialize ht16k33: %s", esp_err_to_name(ret));
+        }
+        else
+        {
+            display_type = 2;
+        }
+    }
 
     // Configure the display
-    tm1637_config_t config = {
+    tm1637_config_t tm1637config = {
         .clk_pin = TM1637_CLK_PIN,
         .dio_pin = TM1637_DIO_PIN,
         .bit_delay_us = 100 // Default timing
     };
 
     // Initialize the display
-    tm1637_handle_t display;
-    esp_err_t ret = tm1637_init(&config, &display);
-    if (ret != ESP_OK)
+    tm1637_handle_t tm1637display;
+
+    if (display_type == 0)
     {
-        ESP_LOGE(TAG, "Failed to initialize TM1637: %s", esp_err_to_name(ret));
-        return;
+        ESP_ERROR_CHECK(i2cdev_done());
+
+        ret = tm1637_init(&tm1637config, &tm1637display);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to initialize TM1637: %s", esp_err_to_name(ret));
+        }
+        else
+        {
+            display_type = 1;
+        }
     }
 
     ESP_LOGI(TAG, "Display initialized successfully");
 
-    // Set brightness to medium (0-7", .izm = "", .val range)
-    tm1637_set_brightness(display, 4, true);
+    if (display_type == 1)
+    {
+        // Set brightness to medium (0-7", .izm = "", .val range)
+        tm1637_set_brightness(tm1637display, 4, true);
+    }
+
+    if (display_type == 2)
+    {
+        ESP_ERROR_CHECK(ht16k33_display_setup(&i2cdev, 1, HTK16K33_F_0HZ));
+        /*
+                for (int i = 0; i < 10; i++)
+                {
+                    ht16data[0] = digits_ht16[i];
+                    ht16data[1] = 0;
+                    ht16data[2] = 0;
+                    ht16data[3] = 0;
+                    ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                }
+        */
+
+        // пилорамка
+        const int hello[17] = {0, 0, 0, 0, 12, 13, 14, 15, 16, 5, 7, 17, 5, 0, 0, 0, 0};
+        for (int i = 0; i < 14; i++)
+        {
+            ht16data[0] = symbols_ht16[hello[i]];
+            ht16data[1] = symbols_ht16[hello[i + 1]];
+            ht16data[2] = symbols_ht16[hello[i + 2]];
+            ht16data[3] = symbols_ht16[hello[i + 3]];
+            ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
+            vTaskDelay(pdMS_TO_TICKS(250));
+        }
+    }
 
     displ_t displ_data;
-    uint8_t char_display[TM1637_MAX_DIGITS];
+    uint8_t tm1637char_display[TM1637_MAX_DIGITS];
 
     while (1)
     {
@@ -512,12 +652,24 @@ void displ_task(void *arg)
             if (val2 < 0)
                 val2 = 0;
 
-            char_display[0] = (val1 >= 10.0) ? tm1637_encode_digit(val1 / 10) : 0;
-            char_display[1] = tm1637_encode_digit(val1 % 10) | ((displ_data.dots == true) ? TM1637_SEG_DP : 0);
-            char_display[2] = tm1637_encode_digit(val2 / 10);
-            char_display[3] = tm1637_encode_digit(val2 % 10);
+            if (display_type == 1) // tm1637
+            {
+                tm1637char_display[0] = (val1 >= 10.0) ? tm1637_encode_digit(val1 / 10) : 0;
+                tm1637char_display[1] = tm1637_encode_digit(val1 % 10) | ((displ_data.dots == true) ? TM1637_SEG_DP : 0);
+                tm1637char_display[2] = tm1637_encode_digit(val2 / 10);
+                tm1637char_display[3] = tm1637_encode_digit(val2 % 10);
 
-            tm1637_set_segments(display, char_display, 4, 0);
+                tm1637_set_segments(tm1637display, tm1637char_display, 4, 0);
+            }
+
+            if (display_type == 2) // VK16K33
+            {
+                ht16data[0] = digits_ht16[val1 / 10];
+                ht16data[1] = digits_ht16[val1 % 10] | ((displ_data.dots == true) ?  0x4000 : 0); //+ dot
+                ht16data[2] = digits_ht16[val2 / 10];
+                ht16data[3] = digits_ht16[val2 % 10];
+                ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
+            }
         }
         vTaskDelay(1);
     }

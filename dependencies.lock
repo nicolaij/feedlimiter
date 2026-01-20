@@ -1,4 +1,44 @@
 dependencies:
+  esp-idf-lib/esp_idf_lib_helpers:
+    component_hash: 689853bb8993434f9556af0f2816e808bf77b5d22100144b21f3519993daf237
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    targets:
+    - esp32
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32c61
+    - esp32h2
+    - esp32p4
+    - esp32s2
+    - esp32s3
+    version: 1.4.0
+  esp-idf-lib/i2cdev:
+    component_hash: 4f3838b2e68ab2b77fd43737139fa97dd0243b46af7b4a04588c67ff6b275ba1
+    dependencies:
+    - name: esp-idf-lib/esp_idf_lib_helpers
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32c61
+    - esp32h2
+    - esp32p4
+    - esp32s2
+    - esp32s3
+    version: 2.1.0
   espressif/cmake_utilities:
     component_hash: 05165f30922b422b4b90c08845e6d449329b97370fbd06309803d8cb539d79e3
     dependencies:
@@ -22,11 +62,12 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 5.5.0
 direct_dependencies:
+- esp-idf-lib/i2cdev
 - espressif/cmake_utilities
 - espressif/led_strip
 - idf
-manifest_hash: 4b76258fa5f69ed26af31707dc91fac6d147eb0e5550b08bb5870ffa7cc0f55e
+manifest_hash: a173968dd21e3cf432aaa0058aef1f2d5cebcb668d1a967e76c2dee7679f12ac
 target: esp32
 version: 2.0.0

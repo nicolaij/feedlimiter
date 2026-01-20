@@ -19,6 +19,8 @@
 
 #include <arpa/inet.h>
 
+#include "driver/dac_oneshot.h"
+
 uint8_t mac[6];
 extern esp_ip4_addr_t pdp_ip;
 extern char net_status_current[32];
@@ -49,7 +51,10 @@ static int s_retry_num = 0;
 static char network_buf[CONFIG_LWIP_TCP_MSS];
 size_t buf_len;
 
-int64_t timeout_begin;
+static int64_t timeout_begin;
+
+extern dac_oneshot_handle_t chan1_handle;
+extern dac_oneshot_handle_t chan2_handle;
 
 void reset_sleep_timeout()
 {
@@ -225,8 +230,17 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
     <form name=\"settings\" action=\"\" method=\"post\">\
     <div id=\"settingscontent\">";
 
-    const char http99[] = "</div><input type=\"submit\" value=\"Submit\" />\
-    </form></body></html>";
+    const char http99[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br>";
+
+    const char http100[] = "<div>"
+                           "<button onclick=\"sendMessage(0)\">DEBUG! DAC = 0%</button>"
+                           "<button onclick=\"sendMessage(127)\">DEBUG! DAC = 50%</button>"
+                           "<button onclick=\"sendMessage(255)\">DEBUG! DAC = 100%</button>"
+                           "</div>"
+                           "<script>const socket = new WebSocket('ws://192.168.4.1/ws');"
+                           "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(\"DAC=\" + value.toString())};}"
+                           "</script>"
+                           "</body></html>";
 
     httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
     httpd_resp_send_chunk(req, http1, sizeof(http1));
@@ -239,6 +253,7 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
     } while (l > 0);
 
     httpd_resp_send_chunk(req, http99, sizeof(http99));
+    httpd_resp_send_chunk(req, http100, sizeof(http100));
     httpd_resp_sendstr_chunk(req, NULL);
     return ESP_OK;
 }
@@ -458,6 +473,76 @@ esp_err_t update_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+char *get_datetime(time_t ttime)
+{
+    static char datetime[24];
+    struct tm *localtm = localtime(&ttime);
+    strftime(datetime, sizeof(datetime), "%Y-%m-%d %T", localtm);
+    return datetime;
+}
+
+httpd_handle_t ws_hd;
+int ws_fd[5] = {0, 0, 0, 0, 0};
+
+static esp_err_t ws_handler(httpd_req_t *req)
+{
+    if (req->method == HTTP_GET)
+    {
+        ESP_LOGI(TAGH, "WS handshake done, the new connection was opened");
+        return ESP_OK;
+    }
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    /* Set max_len = 0 to get the frame len */
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAGH, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        return ret;
+    }
+    ESP_LOGI(TAGH, "frame len is %d", ws_pkt.len);
+    if (ws_pkt.len)
+    {
+        /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
+        buf = calloc(1, ws_pkt.len + 1);
+        if (buf == NULL)
+        {
+            ESP_LOGE(TAGH, "Failed to calloc memory for buf");
+            return ESP_ERR_NO_MEM;
+        }
+        ws_pkt.payload = buf;
+        /* Set max_len = ws_pkt.len to get the frame payload */
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAGH, "httpd_ws_recv_frame failed with %d", ret);
+            free(buf);
+            return ret;
+        }
+        ESP_LOGI(TAGH, "Got packet with message: %s", ws_pkt.payload);
+    }
+
+    ESP_LOGI(TAGH, "ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d", req->handle, httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+
+    if (strncmp("DAC=255", (const char *)ws_pkt.payload, 7) == 0)
+    {
+        run_stage = 100;
+    }
+    if (strncmp("DAC=127", (const char *)ws_pkt.payload, 7) == 0)
+    {
+        run_stage = 101;
+    }
+    if (strncmp("DAC=0", (const char *)ws_pkt.payload, 5) == 0)
+    {
+        run_stage = 102;
+    }
+
+    free(buf);
+    return ret;
+}
+
 static const httpd_uri_t main_page = {
     .uri = "/",
     .method = HTTP_GET,
@@ -482,6 +567,13 @@ static const httpd_uri_t update_post = {
     .handler = update_post_handler,
     .user_ctx = NULL};
 
+static const httpd_uri_t ws = {
+    .uri = "/ws",
+    .method = HTTP_GET,
+    .handler = ws_handler,
+    .user_ctx = NULL,
+    .is_websocket = true};
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -505,7 +597,8 @@ static httpd_handle_t start_webserver(void)
         if (httpd_register_uri_handler(server, &main_page) == ESP_OK &&
             httpd_register_uri_handler(server, &menu_post) == ESP_OK &&
             httpd_register_uri_handler(server, &update_get) == ESP_OK &&
-            httpd_register_uri_handler(server, &update_post) == ESP_OK)
+            httpd_register_uri_handler(server, &update_post) == ESP_OK &&
+            httpd_register_uri_handler(server, &ws) == ESP_OK)
             return server;
     }
 
@@ -555,7 +648,6 @@ void wifi_task(void *arg)
                     esp_ota_mark_app_valid_cancel_rollback();
                 }
             }
-
             reset_sleep_timeout();
         }
         else if ((ulNotifiedValue & NOTYFY_WIFI_ESPNOW) != 0)
@@ -587,7 +679,7 @@ void wifi_task(void *arg)
                     esp_restart();
                 }
 
-                if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("idn") * 60LL * 1000000LL))
+                if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("waitwifi") * 60LL * 1000000LL))
                 {
                     if (xHandleWifi)
                         xTaskNotify(xHandleWifi, NOTYFY_WIFI_REBOOT, eSetValueWithOverwrite);
