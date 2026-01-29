@@ -340,7 +340,7 @@ static esp_err_t menu_post_handler(httpd_req_t *req)
     }
 
     if (xHandleWifi)
-        xTaskNotify(xHandleWifi, NOTYFY_WIFI_REBOOT, eSetValueWithOverwrite);
+        xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
 
     // End response
     return menu_get_handler(req);
@@ -441,7 +441,7 @@ esp_err_t update_post_handler(httpd_req_t *req)
         httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
         ESP_LOGW(TAGH, "Firmware update complete, rebooting now!");
         if (xHandleWifi)
-            xTaskNotify(xHandleWifi, NOTYFY_WIFI_REBOOT, eSetValueWithOverwrite);
+            xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
     }
     else if (file_id == 0x50000)
     {
@@ -467,7 +467,7 @@ esp_err_t update_post_handler(httpd_req_t *req)
         ESP_LOGW(TAGH, "SPIFFS update complete, rebooting now!");
 
         if (xHandleWifi)
-            xTaskNotify(xHandleWifi, NOTYFY_WIFI_REBOOT, eSetValueWithOverwrite);
+            xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
     }
 
     return ESP_OK;
@@ -671,7 +671,7 @@ void wifi_task(void *arg)
                     esp_wifi_deinit();
                     break;
                 }
-                else if ((ulNotifiedValue & NOTYFY_WIFI_REBOOT) != 0)
+                else if ((ulNotifiedValue & REBOOT_NOW) != 0)
                 {
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     esp_wifi_stop();
@@ -682,7 +682,7 @@ void wifi_task(void *arg)
                 if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("waitwifi") * 60LL * 1000000LL))
                 {
                     if (xHandleWifi)
-                        xTaskNotify(xHandleWifi, NOTYFY_WIFI_REBOOT, eSetValueWithOverwrite);
+                        xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
                 }
             }
         }

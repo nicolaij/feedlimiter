@@ -50,7 +50,7 @@ extern int run_stage;
 #define NOTYFY_WIFI BIT0
 #define NOTYFY_WIFI_STOP BIT1
 #define NOTYFY_WIFI_ESPNOW BIT2
-#define NOTYFY_WIFI_REBOOT BIT3
+#define REBOOT_NOW BIT3
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

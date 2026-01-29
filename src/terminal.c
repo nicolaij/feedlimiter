@@ -30,7 +30,7 @@ menu_t menu[] = {
     /*0*/ {.id = "idn", .name = "Номер устройства", .izm = "", .val = 1, .min = 1, .max = 1000000},
     /*1*/ {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
     {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
-    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.000001, .min = 0, .max = 999999},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.036, .min = 0, .max = 999999},
     {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
     {.id = "Imin", .name = "Минимально возможный I ХХ дв.", .izm = "А", .val = 10.0, .min = 0, .max = 100},
     {.id = "Imax", .name = "Максимально возможный I ХХ дв.", .izm = "А", .val = 30.0, .min = 0, .max = 100},
