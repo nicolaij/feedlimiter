@@ -630,7 +630,7 @@ void displ_task(void *arg)
     if (display_type == 1)
     {
         // Set brightness to medium (0-7", .izm = "", .val range)
-        tm1637_set_brightness(tm1637display, 4, true);
+        tm1637_set_brightness(tm1637display, 7, true);
     }
 
     if (display_type == 2)
