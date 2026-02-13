@@ -351,6 +351,9 @@ void adc_task(void *arg)
             if (setup_current < Isetmin + Iconst)
                 setup_current = Isetmin + Iconst;
 
+            if (setup_current > Isetmax)
+                setup_current = Isetmax;
+
             input_error = setup_current - current;
 
             if (run_stage == 5)
@@ -477,10 +480,10 @@ void adc_task(void *arg)
                 pid_reset_ctrl_block(pid_handle);
             }
 
-            if (k_display * current > UINT8_MAX)
+            if (k_display * setup_current > UINT8_MAX)
                 dac2 = UINT8_MAX;
             else
-                dac2 = k_display * current;
+                dac2 = k_display * setup_current;
 
             // для отладки
             if (run_stage == 100)
@@ -498,6 +501,31 @@ void adc_task(void *arg)
                 dac1 = 0;
                 dac2 = 0;
             }
+            else if (run_stage == 110)
+            {
+                current = 10;
+                if (k_display * current > UINT8_MAX)
+                    dac2 = UINT8_MAX;
+                else
+                    dac2 = k_display * current;
+            }
+            else if (run_stage == 111)
+            {
+                current = 50;
+                if (k_display * current > UINT8_MAX)
+                    dac2 = UINT8_MAX;
+                else
+                    dac2 = k_display * current;
+            }
+            else if (run_stage == 999)
+            {
+                adc_continuous_stop(adc_handle);
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                adc_continuous_start(adc_handle);
+                adc_ll_digi_set_convert_limit_num(2);
+
+                run_stage = 1;
+            };
 
             dac_oneshot_output_voltage(chan1_handle, dac1);
             dac_oneshot_output_voltage(chan2_handle, dac2);
@@ -665,7 +693,7 @@ void displ_task(void *arg)
             if (display_type == 2) // VK16K33
             {
                 ht16data[0] = digits_ht16[val1 / 10];
-                ht16data[1] = digits_ht16[val1 % 10] | ((displ_data.dots == true) ?  0x4000 : 0); //+ dot
+                ht16data[1] = digits_ht16[val1 % 10] | ((displ_data.dots == true) ? 0x4000 : 0); //+ dot
                 ht16data[2] = digits_ht16[val2 / 10];
                 ht16data[3] = digits_ht16[val2 % 10];
                 ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));

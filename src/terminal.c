@@ -411,7 +411,7 @@ static void button_event_cb(void *arg, void *data)
             key_mode = 1;
             ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
 
-            // parameters_changed = -1;
+            run_stage = 999;
 
             if (xHandleWifi)
                 xTaskNotifyGive(xHandleWifi); // включаем WiFi

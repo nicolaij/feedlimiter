@@ -233,12 +233,15 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
     const char http99[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br>";
 
     const char http100[] = "<div>"
-                           "<button onclick=\"sendMessage(0)\">DEBUG! DAC = 0%</button>"
-                           "<button onclick=\"sendMessage(127)\">DEBUG! DAC = 50%</button>"
-                           "<button onclick=\"sendMessage(255)\">DEBUG! DAC = 100%</button>"
+                           "<button onclick=\"sendMessage('DAC=0')\">DEBUG! DAC = 0%</button>&nbsp;&nbsp;&nbsp;"
+                           "<button onclick=\"sendMessage('DAC=127')\">DEBUG! DAC = 50%</button>&nbsp;&nbsp;&nbsp;"
+                           "<button onclick=\"sendMessage('DAC=255')\">DEBUG! DAC = 100%</button>"
+                           "</div><div>"
+                           "<button onclick=\"sendMessage('Current=10')\">DEBUG! Current = 10A</button>&nbsp;&nbsp;&nbsp;"
+                           "<button onclick=\"sendMessage('Current=50')\">DEBUG! Current = 50A</button>"
                            "</div>"
                            "<script>const socket = new WebSocket('ws://192.168.4.1/ws');"
-                           "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(\"DAC=\" + value.toString())};}"
+                           "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}"
                            "</script>"
                            "</body></html>";
 
@@ -537,6 +540,14 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (strncmp("DAC=0", (const char *)ws_pkt.payload, 5) == 0)
     {
         run_stage = 102;
+    }
+    if (strncmp("Current=10", (const char *)ws_pkt.payload, 10) == 0)
+    {
+        run_stage = 110;
+    }
+    if (strncmp("Current=50", (const char *)ws_pkt.payload, 10) == 0)
+    {
+        run_stage = 111;
     }
 
     free(buf);
