@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 
 #include "driver/dac_oneshot.h"
+#include "driver/gpio.h"
 
 uint8_t mac[6];
 extern esp_ip4_addr_t pdp_ip;
@@ -240,7 +241,19 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
                            "<button onclick=\"sendMessage('Current=10')\">DEBUG! Current = 10A</button>&nbsp;&nbsp;&nbsp;"
                            "<button onclick=\"sendMessage('Current=50')\">DEBUG! Current = 50A</button>"
                            "</div>"
+                           "<br><div style=\"display: flex; gap: 10px;\">"
+                           "<div id=\"in1\" style=\"width: 100px; height: 50px; background: lightgrey; border-radius: 10px; display: flex; align-items: center; justify-content: center;\"></div>"
+                           "<div id=\"in2\" style=\"width: 100px; height: 50px; background: lightgrey; border-radius: 10px; display: flex; align-items: center; justify-content: center;\"></div>"
+                           "</div>"
                            "<script>const socket = new WebSocket('ws://192.168.4.1/ws');"
+                           "socket.onmessage = function (e) {res = e.data.split(\",\");"
+                           "if (res[0]=1) document.getElementById(\"in1\").style.backgroundColor = \"red\";"
+                           "if (res[0]=0) document.getElementById(\"in1\").style.backgroundColor = \"transparent\";"
+                           "if (res[1]=1) document.getElementById(\"in2\").style.backgroundColor = \"red\";"
+                           "if (res[1]=0) document.getElementById(\"in2\").style.backgroundColor = \"transparent\";"
+                           "document.getElementById(\"in1\").innerHTML = Pin 15;"
+                           "document.getElementById(\"in2\").innerHTML = Pin 4;"
+                           "};"
                            "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}"
                            "</script>"
                            "</body></html>";
@@ -487,8 +500,32 @@ char *get_datetime(time_t ttime)
 httpd_handle_t ws_hd;
 int ws_fd[5] = {0, 0, 0, 0, 0};
 
+struct t_async_resp_arg
+{
+    httpd_handle_t hd;
+    int fd;
+    char *data;
+} async_resp_arg;
+
+esp_err_t ws_send_data()
+{
+    static httpd_ws_frame_t ws_pkt;
+    static char wsbuf[48];
+    ws_pkt.len = snprintf(wsbuf, sizeof(wsbuf), "%d,%d", gpio_get_level(0), gpio_get_level(FEED_FORWARD_PIN));
+    ws_pkt.payload = (uint8_t *)wsbuf;
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    if (async_resp_arg.hd)
+        return httpd_ws_send_frame_async(async_resp_arg.hd, async_resp_arg.fd, &ws_pkt);
+    else
+        return ESP_ERR_NOT_ALLOWED;
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
+    async_resp_arg.fd = httpd_req_to_sockfd(req);
+    async_resp_arg.hd = req->handle;
+
     if (req->method == HTTP_GET)
     {
         ESP_LOGI(TAGH, "WS handshake done, the new connection was opened");
@@ -689,12 +726,13 @@ void wifi_task(void *arg)
                     esp_wifi_deinit();
                     esp_restart();
                 }
-
-                if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("waitwifi") * 60LL * 1000000LL))
-                {
-                    if (xHandleWifi)
-                        xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
-                }
+            /*
+                            if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("waitwifi") * 60LL * 1000000LL))
+                            {
+                                if (xHandleWifi)
+                                    xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
+                            }
+            */
             }
         }
     }

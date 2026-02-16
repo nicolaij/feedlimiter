@@ -70,7 +70,7 @@ static void continuous_adc_init()
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 20000 * 3,
+        .sample_freq_hz = 20000,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
@@ -183,7 +183,7 @@ void adc_task(void *arg)
     // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
 
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
-    adc_ll_digi_set_convert_limit_num(2);
+    // adc_ll_digi_set_convert_limit_num(2);
 
     int64_t time1 = esp_timer_get_time();
     int64_t time2 = esp_timer_get_time();
@@ -522,7 +522,7 @@ void adc_task(void *arg)
                 adc_continuous_stop(adc_handle);
                 vTaskDelay(1000 / portTICK_PERIOD_MS);
                 adc_continuous_start(adc_handle);
-                adc_ll_digi_set_convert_limit_num(2);
+                // adc_ll_digi_set_convert_limit_num(2);
 
                 run_stage = 1;
             };
@@ -531,8 +531,9 @@ void adc_task(void *arg)
             dac_oneshot_output_voltage(chan2_handle, dac2);
 
             time2 = esp_timer_get_time();
+            ws_send_data();
 
-            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (set: %.1f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(GPIO_NUM_13), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (set: %.1f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(FEED_FORWARD_PIN), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
             // printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
 
             time1 = time2;
@@ -592,7 +593,7 @@ void displ_task(void *arg)
         ret = ht16k33_init_desc(&i2cdev, 0, GPIO_NUM_21, GPIO_NUM_22, HT16K33_DEFAULT_ADDR) | ht16k33_init(&i2cdev);
         if (ret != ESP_OK)
         {
-            ESP_LOGE(TAG, "Failed to initialize ht16k33: %s", esp_err_to_name(ret));
+            ESP_LOGE("dislay", "Failed to initialize ht16k33: %s", esp_err_to_name(ret));
         }
         else
         {
@@ -617,7 +618,7 @@ void displ_task(void *arg)
         ret = tm1637_init(&tm1637config, &tm1637display);
         if (ret != ESP_OK)
         {
-            ESP_LOGE(TAG, "Failed to initialize TM1637: %s", esp_err_to_name(ret));
+            ESP_LOGE("dislay", "Failed to initialize TM1637: %s", esp_err_to_name(ret));
         }
         else
         {
@@ -625,7 +626,7 @@ void displ_task(void *arg)
         }
     }
 
-    ESP_LOGI(TAG, "Display initialized successfully");
+    ESP_LOGI("dislay", "Display initialized successfully");
 
     if (display_type == 1)
     {
@@ -664,6 +665,27 @@ void displ_task(void *arg)
     displ_t displ_data;
     uint8_t tm1637char_display[TM1637_MAX_DIGITS];
 
+    uint8_t mac_addr[6];
+    int part1 = get_menu_val_by_id("MAC1");
+    int part2 = get_menu_val_by_id("MAC2");
+    mac_addr[0] = (part1 >> 16) & 0xFF;
+    mac_addr[1] = (part1 >> 8) & 0xFF;
+    mac_addr[2] = (part1 >> 0) & 0xFF;
+    mac_addr[3] = (part2 >> 16) & 0xFF;
+    mac_addr[4] = (part2 >> 8) & 0xFF;
+    mac_addr[5] = (part2 >> 0) & 0xFF;
+
+    if (part1 != 0 || part2 != 0)
+    {
+        if (xHandleWifi)
+            xTaskNotify(xHandleWifi, NOTYFY_WIFI_ESPNOW, eSetValueWithOverwrite);
+        run_stage = 999;            
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        ESP_ERROR_CHECK(esp_now_init());
+        esp_now_peer_info_t peerInfo = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
+        esp_now_add_peer(&peerInfo);
+    }
+
     while (1)
     {
         if (xQueueReceive(xQueueDisplay, &displ_data, portMAX_DELAY))
@@ -698,6 +720,8 @@ void displ_task(void *arg)
                 ht16data[3] = digits_ht16[val2 % 10];
                 ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
             }
+
+            esp_now_send(mac_addr, (uint8_t *)&displ_data, sizeof(displ_t));
         }
         vTaskDelay(1);
     }

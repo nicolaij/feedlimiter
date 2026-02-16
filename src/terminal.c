@@ -29,6 +29,8 @@ int parameters_changed = 0;
 menu_t menu[] = {
     /*0*/ {.id = "idn", .name = "Номер устройства", .izm = "", .val = 1, .min = 1, .max = 1000000},
     /*1*/ {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
+    {.id = "MAC1", .name = "ESPNOW! Target MAC", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
+    {.id = "MAC2", .name = "", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
     {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
     {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.036, .min = 0, .max = 999999},
     {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
@@ -182,7 +184,20 @@ int get_menu_html(char *buf)
             return pos;
         }
 
-        if (strlen(menu[index].name) > 0)
+        if (index == 2) // MAC
+        {
+            uint8_t mac_addr[6];
+            int part1 = menu[index].val;
+            int part2 = menu[index + 1].val;
+            mac_addr[0] = (part1 >> 16) & 0xFF;
+            mac_addr[1] = (part1 >> 8) & 0xFF;
+            mac_addr[2] = (part1 >> 0) & 0xFF;
+            mac_addr[3] = (part2 >> 16) & 0xFF;
+            mac_addr[4] = (part2 >> 8) & 0xFF;
+            mac_addr[5] = (part2 >> 0) & 0xFF;
+            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, MAC2STR(mac_addr));
+        }
+        else if (strlen(menu[index].name) > 0)
         {
             pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
         }
@@ -209,7 +224,12 @@ int get_menu_html(char *buf)
 void console_task(void *arg)
 {
     uint8_t serialbuffer[256];
+    bool espnow_send = false;
+    esp_now_peer_info_t peerInfo = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
 
+    int mac1;
+    int mac2;
+    uint8_t mac_addr[6];
     int selected_menu_id = 0;
 
     char *data = (char *)serialbuffer;
@@ -255,7 +275,19 @@ void console_task(void *arg)
                     int i = 0;
                     for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
                     {
-                        if (strlen(menu[i].name) > 0)
+                        if (i == 2) // MAC
+                        {
+                            mac1 = menu[2].val;
+                            mac2 = menu[3].val;
+                            mac_addr[0] = (mac1 >> 16) & 0xFF;
+                            mac_addr[1] = (mac1 >> 8) & 0xFF;
+                            mac_addr[2] = (mac1 >> 0) & 0xFF;
+                            mac_addr[3] = (mac2 >> 16) & 0xFF;
+                            mac_addr[4] = (mac2 >> 8) & 0xFF;
+                            mac_addr[5] = (mac2 >> 0) & 0xFF;
+                            ESP_LOGI("menu", "%2i. %s: " MACSTR, i + 1, menu[i].name, MAC2STR(mac_addr));
+                        }
+                        else if (strlen(menu[i].name) > 0)
                             ESP_LOGI("menu", "%2i. %s: %g %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
                     }
 
@@ -264,6 +296,20 @@ void console_task(void *arg)
                     ESP_LOGI("menu", "53. DEBUG! DAC1,DAC2 = 0%");
                     ESP_LOGI("menu", "54. FreeRTOS INFO");
                     ESP_LOGI("menu", "55. Reboot");
+                    ESP_LOGI("menu", "-------------------------------------------");
+                    break;
+                case 3: // MAC
+                    mac1 = menu[2].val;
+                    mac2 = menu[3].val;
+                    mac_addr[0] = (mac1 >> 16) & 0xFF;
+                    mac_addr[1] = (mac1 >> 8) & 0xFF;
+                    mac_addr[2] = (mac1 >> 0) & 0xFF;
+                    mac_addr[3] = (mac2 >> 16) & 0xFF;
+                    mac_addr[4] = (mac2 >> 8) & 0xFF;
+                    mac_addr[5] = (mac2 >> 0) & 0xFF;
+
+                    ESP_LOGI("menu", "-------------------------------------------");
+                    ESP_LOGI("menu", "%2i. %s: " MACSTR ". Введите новое значение: ", (int)n, menu[(int)n - 1].name, MAC2STR(mac_addr));
                     ESP_LOGI("menu", "-------------------------------------------");
                     break;
                 case 51: // all adc = 255
@@ -303,6 +349,29 @@ void console_task(void *arg)
                         ESP_LOGE("menu", "Err: %g", n);
                     }
                     break;
+                }
+                break;
+            case 3: // MAC ESPNOW!
+                if (sscanf((const char *)serialbuffer, "%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx",
+                           &mac_addr[0], &mac_addr[1], &mac_addr[2], &mac_addr[3], &mac_addr[4], &mac_addr[5]) == 6)
+                {
+                    esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+                    if (err == ESP_OK)
+                    {
+                        ESP_LOGD("NVS", "Write  \"%s\" : \"" MACSTR "\"", menu[2].id, MAC2STR(mac_addr));
+                        mac1 = (mac_addr[0] << 16) | (mac_addr[1] << 8) | (mac_addr[2]);
+                        menu[2].val = mac1;
+                        err = nvs_set_blob(my_handle, menu[2].id, &menu[2].val, sizeof(float));
+
+                        mac2 = (mac_addr[3] << 16) | (mac_addr[4] << 8) | (mac_addr[5]);
+                        menu[3].val = mac2;
+                        err = nvs_set_blob(my_handle, menu[3].id, &menu[3].val, sizeof(float));
+                        nvs_close(my_handle);
+                    }
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "Error MAC format");
                 }
                 break;
 

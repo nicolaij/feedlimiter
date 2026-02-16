@@ -15,10 +15,13 @@
 #include <sys/time.h>
 #include "esp_sleep.h"
 
+#include "esp_now.h"
+#include "esp_mac.h"
+
 #define LED_PIN GPIO_NUM_2
 #define BTN_PIN GPIO_NUM_0
-#define FEED_FORWARD_PIN GPIO_NUM_15
-#define DISABLE_PIN GPIO_NUM_4
+#define FEED_FORWARD_PIN GPIO_NUM_4
+#define DISABLE_PIN GPIO_NUM_15
 #define ADC_CHANNEL_CURRENT ADC_CHANNEL_5
 #define ADC_CHANNEL_SET ADC_CHANNEL_0
 #define TM1637_CLK_PIN GPIO_NUM_22
@@ -68,5 +71,7 @@ void displ_task(void *arg);
 void wifi_task(void *arg);
 
 int get_menu_html(char *buf);
+
+esp_err_t ws_send_data();
 
 #endif
