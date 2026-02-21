@@ -40,7 +40,7 @@ menu_t menu[] = {
     //{.id = "Iporog", .name = "Порог тока при врезке", .izm = "А", .val = 21.0, .min = 0, .max = 100},
     {.id = "Isetmin", .name = "Минимум I задание", .izm = "А", .val = 18.0, .min = 0, .max = 100},
     {.id = "Isetmax", .name = "Максимум I задание", .izm = "А", .val = 30.0, .min = 0, .max = 100},
-    {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3087, .min = 0, .max = 10000},
+    {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3000, .min = 0, .max = 10000},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
@@ -483,7 +483,7 @@ static void button_event_cb(void *arg, void *data)
             run_stage = 999;
 
             if (xHandleWifi)
-                xTaskNotifyGive(xHandleWifi); // включаем WiFi
+                xTaskNotify(xHandleWifi, NOTYFY_WIFI_SWITCH | NOTYFY_WIFI, eSetValueWithOverwrite);
         }
         else
         {
@@ -491,7 +491,7 @@ static void button_event_cb(void *arg, void *data)
             ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
 
             if (xHandleWifi)
-                xTaskNotify(xHandleWifi, NOTYFY_WIFI_STOP, eSetValueWithOverwrite);
+                xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
         }
 
         key_timeout = KEY_TIMEOUT;
@@ -552,7 +552,7 @@ void btn_task(void *arg)
                             ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
                             ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
                         }
-                    */
+            */
         }
         vTaskDelay(20 / portTICK_PERIOD_MS);
     }

@@ -42,9 +42,6 @@ extern int parameters_changed;
 
 adc_continuous_handle_t adc_handle = NULL;
 
-dac_oneshot_handle_t chan1_handle;
-dac_oneshot_handle_t chan2_handle;
-
 int run_stage = 1;
 
 static const char *TAG = "adc";
@@ -60,6 +57,11 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const a
 
     return (mustYield == pdTRUE);
 }
+
+#if !defined DISPLAY_ONLY
+
+dac_oneshot_handle_t chan1_handle;
+dac_oneshot_handle_t chan2_handle;
 
 static void continuous_adc_init()
 {
@@ -441,9 +443,9 @@ void adc_task(void *arg)
                 if (gpio_get_level(DISABLE_PIN) == 1) // блокировка работы алгоритма
                     run_stage = 1;
 
-                displ_data.curr = current;
+                displ_data.curr = current + 0.5; // округление
                 displ_data.dots = true;
-                displ_data.set = setup_current;
+                displ_data.set = setup_current + 0.5; // округление
             }
             else // DEBUG
             {
@@ -452,7 +454,7 @@ void adc_task(void *arg)
                 displ_data.set = avg_setup % 100;
             }
 
-            // ESP_LOGD("main", "Current: %4.1f A  %4.1f * %d", current, avg_current, k_calc);
+            // ESP_LOGD("main", "Current: %4.1f A %d", current, displ_data.curr);
 
             xQueueSend(xQueueDisplay, &displ_data, 0);
 
@@ -520,7 +522,7 @@ void adc_task(void *arg)
             else if (run_stage == 999)
             {
                 adc_continuous_stop(adc_handle);
-                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                vTaskDelay(1500 / portTICK_PERIOD_MS);
                 adc_continuous_start(adc_handle);
                 // adc_ll_digi_set_convert_limit_num(2);
 
@@ -531,10 +533,13 @@ void adc_task(void *arg)
             dac_oneshot_output_voltage(chan2_handle, dac2);
 
             time2 = esp_timer_get_time();
-            ws_send_data();
 
-            ESP_LOGI("main", "%d stage: %d %8lld Current: %4.1f A (set: %.1f) Setup ADC: %4d; DAC: %4d, %.0f + %.0f + %.0f", gpio_get_level(FEED_FORWARD_PIN), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            char buf[256];
+            int l = snprintf(buf, sizeof(buf), "%d stage: %d %8lld Current: %4.1f A (set: %.1f, ADC: %4d); DAC: %3d, %.0f + %.0f + %.0f", gpio_get_level(FEED_FORWARD_PIN), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
+            ESP_LOGI("main", "%s", buf);
             // printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
+
+            ws_send_data(buf, l);
 
             time1 = time2;
             currents_cnt++;
@@ -542,8 +547,44 @@ void adc_task(void *arg)
     }
 }
 
+#endif
+
+static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+#define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_example_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
+
+static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len)
+{
+    static uint8_t buffer[sizeof(displ_t)];
+
+    uint8_t *mac_addr = recv_info->src_addr;
+    uint8_t *des_addr = recv_info->des_addr;
+
+    if (mac_addr == NULL || data == NULL || len <= 0)
+    {
+        ESP_LOGE(TAG, "Receive cb arg error");
+        return;
+    }
+
+    if (len == sizeof(displ_t))
+    {
+        memcpy(buffer, data, len);
+        xQueueSend(xQueueDisplay, &buffer, 0);
+    }
+
+    if (IS_BROADCAST_ADDR(des_addr))
+    {
+
+        ESP_LOGD(TAG, "Receive broadcast ESPNOW data: %d, %d", ((displ_t *)(data))->curr, ((displ_t *)(data))->set);
+    }
+    else
+    {
+        ESP_LOGD(TAG, "Receive unicast ESPNOW data: %d, %d", ((displ_t *)(data))->curr, ((displ_t *)(data))->set);
+    }
+}
+
 void displ_task(void *arg)
 {
+
     int display_type = 0;
 
     ESP_ERROR_CHECK(i2cdev_init());
@@ -590,7 +631,7 @@ void displ_task(void *arg)
 
     if (display_type == 0)
     {
-        ret = ht16k33_init_desc(&i2cdev, 0, GPIO_NUM_21, GPIO_NUM_22, HT16K33_DEFAULT_ADDR) | ht16k33_init(&i2cdev);
+        ret = ht16k33_init_desc(&i2cdev, 0, SDA_PIN, SCL_PIN, HT16K33_DEFAULT_ADDR) | ht16k33_init(&i2cdev);
         if (ret != ESP_OK)
         {
             ESP_LOGE("dislay", "Failed to initialize ht16k33: %s", esp_err_to_name(ret));
@@ -603,8 +644,8 @@ void displ_task(void *arg)
 
     // Configure the display
     tm1637_config_t tm1637config = {
-        .clk_pin = TM1637_CLK_PIN,
-        .dio_pin = TM1637_DIO_PIN,
+        .clk_pin = SCL_PIN,
+        .dio_pin = SDA_PIN,
         .bit_delay_us = 100 // Default timing
     };
 
@@ -679,16 +720,23 @@ void displ_task(void *arg)
     {
         if (xHandleWifi)
             xTaskNotify(xHandleWifi, NOTYFY_WIFI_ESPNOW, eSetValueWithOverwrite);
-        run_stage = 999;            
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        run_stage = 999;
+        vTaskDelay(1200 / portTICK_PERIOD_MS);
         ESP_ERROR_CHECK(esp_now_init());
+
         esp_now_peer_info_t peerInfo = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
+#if defined DISPLAY_ONLY
+        // 84:f7:03:41:39:f9
+        ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
+#else
+        memcpy(peerInfo.peer_addr, mac_addr, ESP_NOW_ETH_ALEN);
+#endif
         esp_now_add_peer(&peerInfo);
     }
 
     while (1)
     {
-        if (xQueueReceive(xQueueDisplay, &displ_data, portMAX_DELAY))
+        if (xQueueReceive(xQueueDisplay, &displ_data, 3000 / portTICK_PERIOD_MS) == pdPASS)
         {
             int val1 = displ_data.curr;
             if (val1 > 99)
@@ -720,8 +768,16 @@ void displ_task(void *arg)
                 ht16data[3] = digits_ht16[val2 % 10];
                 ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
             }
-
+#if !defined DISPLAY_ONLY
             esp_now_send(mac_addr, (uint8_t *)&displ_data, sizeof(displ_t));
+#endif
+        }
+        else
+        {
+            displ_data.curr = 0;
+            displ_data.set = 0;
+            displ_data.dots = 0;
+            xQueueSend(xQueueDisplay, &displ_data, 0);
         }
         vTaskDelay(1);
     }

@@ -18,14 +18,22 @@
 #include "esp_now.h"
 #include "esp_mac.h"
 
-#define LED_PIN GPIO_NUM_2
+#if !defined DISPLAY_ONLY
+#define SDA_PIN GPIO_NUM_21
+#define SCL_PIN GPIO_NUM_22
 #define BTN_PIN GPIO_NUM_0
+#else
+#define SDA_PIN GPIO_NUM_19
+#define SCL_PIN GPIO_NUM_18
+#define BTN_PIN GPIO_NUM_9
+
+#endif
+
+#define LED_PIN GPIO_NUM_2
 #define FEED_FORWARD_PIN GPIO_NUM_4
 #define DISABLE_PIN GPIO_NUM_15
 #define ADC_CHANNEL_CURRENT ADC_CHANNEL_5
 #define ADC_CHANNEL_SET ADC_CHANNEL_0
-#define TM1637_CLK_PIN GPIO_NUM_22
-#define TM1637_DIO_PIN GPIO_NUM_21
 
 typedef struct
 {
@@ -51,6 +59,7 @@ extern TaskHandle_t xHandleConsole;
 extern int run_stage;
 
 #define NOTYFY_WIFI BIT0
+#define NOTYFY_WIFI_SWITCH BIT10
 #define NOTYFY_WIFI_STOP BIT1
 #define NOTYFY_WIFI_ESPNOW BIT2
 #define REBOOT_NOW BIT3
@@ -72,6 +81,6 @@ void wifi_task(void *arg);
 
 int get_menu_html(char *buf);
 
-esp_err_t ws_send_data();
+esp_err_t ws_send_data(const char *str, const int len);
 
 #endif

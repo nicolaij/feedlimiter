@@ -54,9 +54,6 @@ size_t buf_len;
 
 static int64_t timeout_begin;
 
-extern dac_oneshot_handle_t chan1_handle;
-extern dac_oneshot_handle_t chan2_handle;
-
 void reset_sleep_timeout()
 {
     timeout_begin = esp_timer_get_time();
@@ -222,45 +219,46 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
 {
     int l = 0;
 
-    const char http1[] = "<!DOCTYPE html>\n\
-    <html><head>\
-    <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />\
-    <meta name=\"viewport\" content=\"width=device-width\" />\
-    <title>Настройки</title>\
-    <meta charset=\"utf-8\"></head><body>\
-    <form name=\"settings\" action=\"\" method=\"post\">\
-    <div id=\"settingscontent\">";
+    const char http1[] = "<!DOCTYPE html>\n"
+                         "<html><head>"
+                         "<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />"
+                         "<meta name=\"viewport\" content=\"width=device-width\" />"
+                         "<title>Настройки</title>"
+                         "<meta charset=\"utf-8\"></head><body>";
 
-    const char http99[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br>";
+    const char http2[] = "<form name=\"settings\" action=\"\" method=\"post\">"
+                         "<div id=\"settingscontent\">";
 
-    const char http100[] = "<div>"
-                           "<button onclick=\"sendMessage('DAC=0')\">DEBUG! DAC = 0%</button>&nbsp;&nbsp;&nbsp;"
-                           "<button onclick=\"sendMessage('DAC=127')\">DEBUG! DAC = 50%</button>&nbsp;&nbsp;&nbsp;"
-                           "<button onclick=\"sendMessage('DAC=255')\">DEBUG! DAC = 100%</button>"
-                           "</div><div>"
-                           "<button onclick=\"sendMessage('Current=10')\">DEBUG! Current = 10A</button>&nbsp;&nbsp;&nbsp;"
-                           "<button onclick=\"sendMessage('Current=50')\">DEBUG! Current = 50A</button>"
-                           "</div>"
-                           "<br><div style=\"display: flex; gap: 10px;\">"
-                           "<div id=\"in1\" style=\"width: 100px; height: 50px; background: lightgrey; border-radius: 10px; display: flex; align-items: center; justify-content: center;\"></div>"
-                           "<div id=\"in2\" style=\"width: 100px; height: 50px; background: lightgrey; border-radius: 10px; display: flex; align-items: center; justify-content: center;\"></div>"
-                           "</div>"
-                           "<script>const socket = new WebSocket('ws://192.168.4.1/ws');"
-                           "socket.onmessage = function (e) {res = e.data.split(\",\");"
-                           "if (res[0]=1) document.getElementById(\"in1\").style.backgroundColor = \"red\";"
-                           "if (res[0]=0) document.getElementById(\"in1\").style.backgroundColor = \"transparent\";"
-                           "if (res[1]=1) document.getElementById(\"in2\").style.backgroundColor = \"red\";"
-                           "if (res[1]=0) document.getElementById(\"in2\").style.backgroundColor = \"transparent\";"
-                           "document.getElementById(\"in1\").innerHTML = Pin 15;"
-                           "document.getElementById(\"in2\").innerHTML = Pin 4;"
-                           "};"
-                           "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}"
-                           "</script>"
-                           "</body></html>";
+    const char http3[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br><textarea id=\"txt\" rows=\"10\" cols=\"100\" readonly></textarea>";
+
+    const char http4[] = "<div>"
+                         "<button onclick=\"sendMessage('DAC=0')\">DEBUG! DAC = 0%</button>&nbsp;&nbsp;&nbsp;"
+                         "<button onclick=\"sendMessage('DAC=127')\">DEBUG! DAC = 50%</button>&nbsp;&nbsp;&nbsp;"
+                         "<button onclick=\"sendMessage('DAC=255')\">DEBUG! DAC = 100%</button>"
+                         "</div><div>"
+                         "<button onclick=\"sendMessage('Current=10')\">DEBUG! Current = 10A</button>&nbsp;&nbsp;&nbsp;"
+                         "<button onclick=\"sendMessage('Current=50')\">DEBUG! Current = 50A</button>"
+                         "</div>"
+                         "<br><div style=\"display: flex; gap: 10px;\">"
+                          "</div>"
+                         "<script>\nconst socket = new WebSocket(\"ws://\" + location.host + \"/ws\");\n"
+                         "const textarea = document.getElementById(\"txt\");"
+                         "socket.onmessage = function (event) {"
+                         "textarea.value += event.data + \"\\n\";"
+                         "textarea.scrollTop = textarea.scrollHeight;"
+                         "};"
+                         "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}"
+                         "</script>"
+                         "</body></html>";
 
     httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
     httpd_resp_send_chunk(req, http1, sizeof(http1));
 
+    char buf[128];
+    int s = sprintf(buf, "<b>MAC address:</b> " MACSTR "<br>", MAC2STR(mac));
+    httpd_resp_send_chunk(req, buf, s);
+
+    httpd_resp_send_chunk(req, http2, sizeof(http2));
     do
     {
         l = get_menu_html(network_buf);
@@ -268,8 +266,8 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
             httpd_resp_send_chunk(req, network_buf, l);
     } while (l > 0);
 
-    httpd_resp_send_chunk(req, http99, sizeof(http99));
-    httpd_resp_send_chunk(req, http100, sizeof(http100));
+    httpd_resp_send_chunk(req, http3, sizeof(http3));
+    httpd_resp_send_chunk(req, http4, sizeof(http4));
     httpd_resp_sendstr_chunk(req, NULL);
     return ESP_OK;
 }
@@ -507,16 +505,22 @@ struct t_async_resp_arg
     char *data;
 } async_resp_arg;
 
-esp_err_t ws_send_data()
+esp_err_t ws_send_data(const char *str, const int len)
 {
     static httpd_ws_frame_t ws_pkt;
-    static char wsbuf[48];
-    ws_pkt.len = snprintf(wsbuf, sizeof(wsbuf), "%d,%d", gpio_get_level(0), gpio_get_level(FEED_FORWARD_PIN));
+    static char wsbuf[256];
+    memcpy(wsbuf, str, len);
+    ws_pkt.len = len;
     ws_pkt.payload = (uint8_t *)wsbuf;
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
     if (async_resp_arg.hd)
-        return httpd_ws_send_frame_async(async_resp_arg.hd, async_resp_arg.fd, &ws_pkt);
+    {
+        if (httpd_ws_send_frame_async(async_resp_arg.hd, async_resp_arg.fd, &ws_pkt) != ESP_OK)
+        {
+            async_resp_arg.hd = 0;
+        }
+    }
     else
         return ESP_ERR_NOT_ALLOWED;
 }
@@ -669,63 +673,73 @@ void wifi_task(void *arg)
     while (1)
     {
         /* Ожидание оповещения безконечно, для запуска WiFi. */
-        xTaskNotifyWait(pdFALSE,          /* Не очищать биты на входе. */
+        xTaskNotifyWait(pdTRUE,           /* очищать биты на входе. */
                         ULONG_MAX,        // ULONG_MAX, /* Очистка всех бит на выходе. */
                         &ulNotifiedValue, /* Сохраняет значение оповещения. */
                         portMAX_DELAY);
 
         // ESP_LOGD("WIFI ulNotifiedValue", "0x%lX", ulNotifiedValue);
 
-        if ((ulNotifiedValue & NOTYFY_WIFI) != 0)
-        {
-            wifi_init_softap(1, 0); // WiFi
-
-            /* Start the server for the first time */
-            start_webserver();
-
-            /* Mark current app as valid */
-            const esp_partition_t *partition = esp_ota_get_running_partition();
-            // printf("Currently running partition: %s\r\n", partition->label);
-            ESP_LOGI(TAGW, "Currently running partition: %s", partition->label);
-
-            esp_ota_img_states_t ota_state;
-            if (esp_ota_get_state_partition(partition, &ota_state) == ESP_OK)
-            {
-                if (ota_state == ESP_OTA_IMG_PENDING_VERIFY)
-                {
-                    esp_ota_mark_app_valid_cancel_rollback();
-                }
-            }
-            reset_sleep_timeout();
-        }
-        else if ((ulNotifiedValue & NOTYFY_WIFI_ESPNOW) != 0)
+        if ((ulNotifiedValue & NOTYFY_WIFI_ESPNOW) != 0)
         {
             wifi_init_softap(1, 1);
         }
+        else
+        {
+            wifi_init_softap(1, 0); // WiFi
+        }
+
+        /* Start the server for the first time */
+        start_webserver();
+
+        /* Mark current app as valid */
+        const esp_partition_t *partition = esp_ota_get_running_partition();
+        // printf("Currently running partition: %s\r\n", partition->label);
+        ESP_LOGI(TAGW, "Currently running partition: %s", partition->label);
+
+        esp_ota_img_states_t ota_state;
+        if (esp_ota_get_state_partition(partition, &ota_state) == ESP_OK)
+        {
+            if (ota_state == ESP_OTA_IMG_PENDING_VERIFY)
+            {
+                esp_ota_mark_app_valid_cancel_rollback();
+            }
+        }
+        reset_sleep_timeout();
 
         // WIFI loop
-        if (ulNotifiedValue & (NOTYFY_WIFI | NOTYFY_WIFI_ESPNOW))
+        while (1)
         {
-            while (1)
-            {
-                xTaskNotifyWait(pdFALSE,          /* очищать биты на входе. */
-                                ULONG_MAX,        // ULONG_MAX, /* Очистка всех бит на выходе. */
-                                &ulNotifiedValue, /* Сохраняет значение оповещения. */
-                                pdMS_TO_TICKS(100));
+            xTaskNotifyWait(pdTRUE,           /* очищать биты на входе. */
+                            ULONG_MAX,        // ULONG_MAX, /* Очистка всех бит на выходе. */
+                            &ulNotifiedValue, /* Сохраняет значение оповещения. */
+                            portMAX_DELAY);   // 300 / portTICK_PERIOD_MS);
 
-                if ((ulNotifiedValue & NOTYFY_WIFI_STOP) != 0)
+            if ((ulNotifiedValue & NOTYFY_WIFI_STOP) != 0)
+            {
+                esp_wifi_stop();
+                esp_wifi_deinit();
+                break;
+            }
+            else if ((ulNotifiedValue & NOTYFY_WIFI_SWITCH) != 0)
+            {
+                wifi_config_t wifi_config;
+                if (esp_wifi_get_config(WIFI_IF_AP, &wifi_config) == ESP_OK)
                 {
-                    esp_wifi_stop();
-                    esp_wifi_deinit();
-                    break;
+                    if (wifi_config.ap.ssid_hidden == 1)
+                    {
+                        wifi_config.ap.ssid_hidden = 0;
+                        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+                    }
                 }
-                else if ((ulNotifiedValue & REBOOT_NOW) != 0)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                    esp_wifi_stop();
-                    esp_wifi_deinit();
-                    esp_restart();
-                }
+            }
+            else if ((ulNotifiedValue & REBOOT_NOW) != 0)
+            {
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                esp_wifi_stop();
+                esp_wifi_deinit();
+                esp_restart();
+            }
             /*
                             if (esp_timer_get_time() - timeout_begin > (get_menu_val_by_id("waitwifi") * 60LL * 1000000LL))
                             {
@@ -733,7 +747,6 @@ void wifi_task(void *arg)
                                     xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
                             }
             */
-            }
         }
     }
 }
