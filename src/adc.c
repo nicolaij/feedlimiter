@@ -153,6 +153,7 @@ void adc_task(void *arg)
     float Isetmax = get_menu_val_by_id("Isetmax");
     // float Iporog = get_menu_val_by_id("Iporog");
     float ADCmax = get_menu_val_by_id("ADCmax");
+    float ADCk1 = get_menu_val_by_id("ADCk1"); // линейность
 
     current_offset = get_menu_val_by_id("offsetADC");
 
@@ -328,6 +329,7 @@ void adc_task(void *arg)
                 Imin = get_menu_val_by_id("Imin");
                 Imax = get_menu_val_by_id("Imax");
                 Iconst = get_menu_val_by_id("Iconst");
+                ADCk1 = get_menu_val_by_id("ADCk1"); // линейность
                 /*
                                 if (parameters_changed == -1)
                                 {
@@ -349,16 +351,23 @@ void adc_task(void *arg)
             float current = avg_current * k_calc; // in A
             currents[currents_cnt] = (current * 1000.0f);
 
-            float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
-            if (setup_current < Isetmin + Iconst)
-                setup_current = Isetmin + Iconst;
+            // float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
+            float ADCk2 = ((Isetmax - Isetmin) - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
+            // float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
+            float setup_current = Isetmin + ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
+            float Isetminlimit = (float)current_xx / 1000.0f;
+            if (Isetmin > Isetminlimit)
+                Isetminlimit = Isetmin;
+
+            if (setup_current < Isetminlimit)
+                setup_current = Isetminlimit;
 
             if (setup_current > Isetmax)
                 setup_current = Isetmax;
 
             input_error = setup_current - current;
 
-            if (run_stage == 5)
+            if (run_stage == 5) // пилим
             {
                 int xx = current_xx + Iconst * 1000.0f;
                 if (currents[currents_cnt] < xx &&
@@ -377,7 +386,8 @@ void adc_task(void *arg)
                 if (currents[currents_cnt] > xx) // врезка
                 {
                     run_stage = 5;
-                    pid_handle->integral_err = (avg_setup * UINT8_MAX / ADCmax - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
+                    // pid_handle->integral_err = (avg_setup * UINT8_MAX / ADCmax - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
+                    pid_handle->integral_err = ((setup_current - Isetminlimit) * UINT8_MAX / (Isetmax - Isetmin) - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                 }
 
                 int xxm = (Imin - Iconst) * 1000.0f;
@@ -410,8 +420,8 @@ void adc_task(void *arg)
             {
                 current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)]) / 2;
                 ESP_LOGI("main", "XX: %d", current_xx);
-                Isetmin = (float)current_xx / 1000.0f;
-                // Iporog = Isetmin + Iconst + 1.0f;
+                // Isetmin = (float)current_xx / 1000.0f;
+                //  Iporog = Isetmin + Iconst + 1.0f;
                 run_stage = 4;
             }
 
@@ -462,8 +472,8 @@ void adc_task(void *arg)
             uint8_t dac2 = 0;
             static float ret_result = 0;
             // float intg = pid_handle->integral_err;
-            pid_handle->max_output = avg_setup * UINT8_MAX / ADCmax + (UINT8_MAX * 20 / 100);
-            pid_handle->min_output = avg_setup * UINT8_MAX / ADCmax / 5;
+            pid_handle->max_output = avg_setup * UINT8_MAX / ADCmax + (UINT8_MAX * 10 / 100);
+            pid_handle->min_output = avg_setup * UINT8_MAX / ADCmax / 10;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             dac1 = (int)ret_result;
@@ -479,6 +489,7 @@ void adc_task(void *arg)
                     dac1 = UINT8_MAX;
                 else
                     dac1 = avg_setup * UINT8_MAX / ADCmax;
+
                 pid_reset_ctrl_block(pid_handle);
             }
 
@@ -769,7 +780,8 @@ void displ_task(void *arg)
                 ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
             }
 #if !defined DISPLAY_ONLY
-            esp_now_send(mac_addr, (uint8_t *)&displ_data, sizeof(displ_t));
+            if (part1 != 0 || part2 != 0)
+                esp_now_send(mac_addr, (uint8_t *)&displ_data, sizeof(displ_t));
 #endif
         }
         else
