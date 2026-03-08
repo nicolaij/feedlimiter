@@ -240,7 +240,7 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
                          "<button onclick=\"sendMessage('Current=50')\">DEBUG! Current = 50A</button>"
                          "</div>"
                          "<br><div style=\"display: flex; gap: 10px;\">"
-                          "</div>"
+                         "</div>"
                          "<script>\nconst socket = new WebSocket(\"ws://\" + location.host + \"/ws\");\n"
                          "const textarea = document.getElementById(\"txt\");"
                          "socket.onmessage = function (event) {"
@@ -513,16 +513,18 @@ esp_err_t ws_send_data(const char *str, const int len)
     ws_pkt.len = len;
     ws_pkt.payload = (uint8_t *)wsbuf;
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    esp_err_t ret = ESP_ERR_NOT_ALLOWED;
 
     if (async_resp_arg.hd)
     {
-        if (httpd_ws_send_frame_async(async_resp_arg.hd, async_resp_arg.fd, &ws_pkt) != ESP_OK)
+        ret = httpd_ws_send_frame_async(async_resp_arg.hd, async_resp_arg.fd, &ws_pkt);
+        if (ret != ESP_OK)
         {
             async_resp_arg.hd = 0;
         }
-    }
-    else
-        return ESP_ERR_NOT_ALLOWED;
+    };
+
+    return ret;
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)

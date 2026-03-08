@@ -9,8 +9,6 @@
 
 #include <main.h>
 
-static const char *TAG = "FLIM";
-
 QueueHandle_t xQueueDisplay;
 TaskHandle_t xHandleWifi = NULL;
 TaskHandle_t xHandleADC = NULL;
