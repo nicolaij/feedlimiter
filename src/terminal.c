@@ -41,7 +41,7 @@ menu_t menu[] = {
     {.id = "Isetmin", .name = "Минимум I задание", .izm = "А", .val = 10.0, .min = 0, .max = 100},
     {.id = "Isetmax", .name = "Максимум I задание", .izm = "А", .val = 30.0, .min = 0, .max = 100},
     {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3000, .min = 0, .max = 10000},
-    {.id = "ADCk1", .name = "Линейность регулятора", .izm = "", .val = 0.00666667, .min = 0, .max = 0.01},
+    {.id = "ADCk1", .name = "Линейность регулятора", .izm = "", .val = 0.08, .min = 0, .max = 0.1},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
