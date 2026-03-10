@@ -102,8 +102,8 @@ struct tm1637_dev_t
 
 static inline void delay_us(tm1637_handle_t dev)
 {
-    //ets_delay_us(dev->delay_us);
-    vTaskDelay(1);
+    ets_delay_us(dev->delay_us);
+    //vTaskDelay(1);
 }
 
 /**
@@ -179,6 +179,7 @@ static bool protocol_transmit_byte(tm1637_handle_t dev, uint8_t byte_data)
 
         gpio_set_level(dev->pin_clk, 1);
         delay_us(dev);
+        vTaskDelay(1);
     }
 
     /* Read ACK bit (9th clock) */
