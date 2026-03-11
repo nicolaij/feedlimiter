@@ -139,7 +139,8 @@ void wifi_init_softap(uint8_t channel, uint8_t ssid_hidden)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(44)); // влияние на измерения АЦП незначительные
+    //ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(44)); // влияние на измерения АЦП незначительные
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(20));
 
     int8_t power = 0;
     ESP_ERROR_CHECK(esp_wifi_get_max_tx_power(&power));

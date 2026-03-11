@@ -28,7 +28,7 @@ int parameters_changed = 0;
 
 menu_t menu[] = {
     /*0*/ {.id = "idn", .name = "Номер устройства", .izm = "", .val = 1, .min = 1, .max = 1000000},
-    /*1*/ {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
+    // {.id = "waitwifi", .name = "Ожидание WiFi", .izm = "мин", .val = 3, .min = 1, .max = 1000000},
     {.id = "MAC1", .name = "ESPNOW! Target MAC", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
     {.id = "MAC2", .name = "", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
     {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
@@ -45,10 +45,10 @@ menu_t menu[] = {
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
-    {.id = "pidintMax", .name = "PID Intergal maximum", .izm = "", .val = 255, .min = -999999, .max = 999999},
-    {.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = 0, .min = -999999, .max = 999999},
-    {.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 999999},
-    {.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 999999},
+    //{.id = "pidintMax", .name = "PID Intergal maximum", .izm = "", .val = 255, .min = -999999, .max = 999999},
+    //{.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = 0, .min = -999999, .max = 999999},
+    //{.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 999999},
+    //{.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 999999},
 };
 
 esp_err_t init_nvs()
