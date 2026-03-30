@@ -170,10 +170,10 @@ void adc_task(void *arg)
                                   .init_param.kp = get_menu_val_by_id("pidP"),
                                   .init_param.ki = get_menu_val_by_id("pidI"),
                                   .init_param.kd = get_menu_val_by_id("pidD"),
-                                  .init_param.max_integral = get_menu_val_by_id("pidintMax"),
-                                  .init_param.min_integral = get_menu_val_by_id("pidintMin"),
-                                  .init_param.max_output = get_menu_val_by_id("pidMax"),
-                                  .init_param.min_output = get_menu_val_by_id("pidMin")};
+                                  .init_param.max_integral = 255,
+                                  .init_param.min_integral = 0,
+                                  .init_param.max_output = 255,
+                                  .init_param.min_output = 0};
 
     continuous_adc_init();
 
@@ -213,7 +213,7 @@ void adc_task(void *arg)
         if (ret == ESP_ERR_TIMEOUT)
         {
             vTaskDelay(1);
-            continue;
+            break;
         }
 
         if (ret == ESP_ERR_INVALID_STATE)
@@ -316,10 +316,10 @@ void adc_task(void *arg)
                                                .kp = get_menu_val_by_id("pidP"),
                                                .ki = get_menu_val_by_id("pidI"),
                                                .kd = get_menu_val_by_id("pidD"),
-                                               .max_integral = get_menu_val_by_id("pidintMax"),
-                                               .min_integral = get_menu_val_by_id("pidintMin"),
-                                               .max_output = get_menu_val_by_id("pidMax"),
-                                               .min_output = get_menu_val_by_id("pidMin")};
+                                               .max_integral = 255,
+                                               .min_integral = 0,
+                                               .max_output = 255,
+                                               .min_output = 0};
 
                 pid_update_parameters(pid_handle, &params);
 
@@ -361,7 +361,7 @@ void adc_task(void *arg)
             // float ADCk2 = ((Isetmax - Isetmin) - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
             // float setup_current = Isetmin + ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
             float setup_current = (Isetmin + avg_setup * (Isetmax - Isetmin) / ADCmax); // линейно
-            float Isetminlimit = (float)current_xx / 1000.0f;
+            float Isetminlimit = 0;//(float)current_xx / 1000.0f;
             if (Isetmin > Isetminlimit)
                 Isetminlimit = Isetmin;
 
@@ -421,6 +421,9 @@ void adc_task(void *arg)
             {
                 if (sw1 > 0)
                     sw1 = -1;
+
+                if (run_stage == 5)
+                    run_stage = 4;
             }
 
             if (run_stage == 3) // фиксируем ХХ
@@ -483,8 +486,10 @@ void adc_task(void *arg)
             setup_speed = ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
             if (setup_speed > UINT8_MAX)
                 setup_speed = UINT8_MAX;
+
             pid_handle->max_output = setup_speed + (UINT8_MAX * 10 / 100);
             pid_handle->min_output = setup_speed / 10;
+            pid_handle->max_integral = pid_handle->max_output;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
             dac1 = (int)ret_result;
@@ -494,7 +499,7 @@ void adc_task(void *arg)
                 dac1 = UINT8_MAX;
             }
 
-            if (run_stage != 5)
+            if (run_stage != 5) // не автомат
             {
                 dac1 = setup_speed;
 

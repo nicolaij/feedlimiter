@@ -185,7 +185,7 @@ int get_menu_html(char *buf)
             return pos;
         }
 
-        if (index == 2) // MAC
+        if (index == 1) // MAC
         {
             uint8_t mac_addr[6];
             int part1 = menu[index].val;
@@ -276,10 +276,10 @@ void console_task(void *arg)
                     int i = 0;
                     for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
                     {
-                        if (i == 2) // MAC
+                        if (i == 1) // MAC
                         {
-                            mac1 = menu[2].val;
-                            mac2 = menu[3].val;
+                            mac1 = menu[1].val;
+                            mac2 = menu[2].val;
                             mac_addr[0] = (mac1 >> 16) & 0xFF;
                             mac_addr[1] = (mac1 >> 8) & 0xFF;
                             mac_addr[2] = (mac1 >> 0) & 0xFF;
@@ -299,9 +299,9 @@ void console_task(void *arg)
                     ESP_LOGI("menu", "55. Reboot");
                     ESP_LOGI("menu", "-------------------------------------------");
                     break;
-                case 3: // MAC
-                    mac1 = menu[2].val;
-                    mac2 = menu[3].val;
+                case 2: // MAC
+                    mac1 = menu[1].val;
+                    mac2 = menu[2].val;
                     mac_addr[0] = (mac1 >> 16) & 0xFF;
                     mac_addr[1] = (mac1 >> 8) & 0xFF;
                     mac_addr[2] = (mac1 >> 0) & 0xFF;
@@ -352,21 +352,21 @@ void console_task(void *arg)
                     break;
                 }
                 break;
-            case 3: // MAC ESPNOW!
+            case 2: // MAC ESPNOW!
                 if (sscanf((const char *)serialbuffer, "%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx",
                            &mac_addr[0], &mac_addr[1], &mac_addr[2], &mac_addr[3], &mac_addr[4], &mac_addr[5]) == 6)
                 {
                     esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
                     if (err == ESP_OK)
                     {
-                        ESP_LOGD("NVS", "Write  \"%s\" : \"" MACSTR "\"", menu[2].id, MAC2STR(mac_addr));
+                        ESP_LOGD("NVS", "Write  \"%s\" : \"" MACSTR "\"", menu[1].id, MAC2STR(mac_addr));
                         mac1 = (mac_addr[0] << 16) | (mac_addr[1] << 8) | (mac_addr[2]);
-                        menu[2].val = mac1;
-                        err = nvs_set_blob(my_handle, menu[2].id, &menu[2].val, sizeof(float));
+                        menu[1].val = mac1;
+                        err = nvs_set_blob(my_handle, menu[1].id, &menu[1].val, sizeof(float));
 
                         mac2 = (mac_addr[3] << 16) | (mac_addr[4] << 8) | (mac_addr[5]);
-                        menu[3].val = mac2;
-                        err = nvs_set_blob(my_handle, menu[3].id, &menu[3].val, sizeof(float));
+                        menu[2].val = mac2;
+                        err = nvs_set_blob(my_handle, menu[2].id, &menu[2].val, sizeof(float));
                         nvs_close(my_handle);
                     }
                 }
