@@ -487,7 +487,7 @@ void adc_task(void *arg)
             if (setup_speed > UINT8_MAX)
                 setup_speed = UINT8_MAX;
 
-            pid_handle->max_output = setup_speed + (UINT8_MAX * 10 / 100);
+            pid_handle->max_output = setup_speed + (UINT8_MAX * 15 / 100);
             pid_handle->min_output = setup_speed / 10;
             pid_handle->max_integral = pid_handle->max_output;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));

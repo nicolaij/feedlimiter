@@ -417,7 +417,7 @@ void console_task(void *arg)
                 break;
             }
 
-            if ((selected_menu_id == 0 && n > 0) && (n < sizeof(menu) / sizeof(menu_t)))
+            if ((selected_menu_id == 0 && n > 0) && (n <= sizeof(menu) / sizeof(menu_t)))
                 selected_menu_id = n;
             else
                 selected_menu_id = 0;
