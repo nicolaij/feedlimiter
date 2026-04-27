@@ -41,7 +41,11 @@ menu_t menu[] = {
     {.id = "Isetmin", .name = "Минимум I задание", .izm = "А", .val = 10.0, .min = 0, .max = 100},
     {.id = "Isetmax", .name = "Максимум I задание", .izm = "А", .val = 30.0, .min = 0, .max = 100},
     {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3000, .min = 0, .max = 10000},
-    {.id = "ADCk1", .name = "Линейность регулятора", .izm = "", .val = 0.08, .min = 0, .max = 0.1},
+    /* ADCk1 = 0 - Максимально квадратичная зависимость
+       ADCk2 = 0 - Линейная зависимость регулятора Для этого ADCk1 = 255/ADCmax */
+    {.id = "ADCk1", .name = "Линейность регулятора", .izm = "", .val = 0.08, .min = 0, .max = 1},
+    {.id = "OVRSpeed", .name = "Увелич. скорости при работе ПИД", .izm = "%", .val = 10, .min = 0, .max = 100},
+    {.id = "DACMinOut", .name = "DAC.Минимальная скорость пиления", .izm = "", .val = 3, .min = 0, .max = 200},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
     {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},

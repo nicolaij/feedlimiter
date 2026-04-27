@@ -160,7 +160,12 @@ void adc_task(void *arg)
     float Imin = get_menu_val_by_id("Imin");
     float Imax = get_menu_val_by_id("Imax");
     float Iconst = get_menu_val_by_id("Iconst");
-    // float Iporog = Isetmin + Iconst + 1.0f;
+
+    // Увелич. скорости при работе ПИД
+    float OVRSpeed = get_menu_val_by_id("OVRSpeed");
+
+    // DAC.Минимальная скорость пиления
+    float DACMinOut = get_menu_val_by_id("DACMinOut");
 
     displ_t displ_data;
 
@@ -194,6 +199,8 @@ void adc_task(void *arg)
     float input_error = 0;
 
     float ADCk2 = (UINT8_MAX - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
+    if (ADCk2 < 0)
+        ADCk2 = 0;
     float setup_speed = 0;
 
     while (1)
@@ -335,6 +342,11 @@ void adc_task(void *arg)
                 ADCk1 = get_menu_val_by_id("ADCk1"); // линейность
 
                 ADCk2 = (UINT8_MAX - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
+                if (ADCk2 < 0)
+                    ADCk2 = 0;
+
+                OVRSpeed = get_menu_val_by_id("OVRSpeed");
+                DACMinOut = get_menu_val_by_id("DACMinOut");
 
                 /*
                                 if (parameters_changed == -1)
@@ -361,7 +373,7 @@ void adc_task(void *arg)
             // float ADCk2 = ((Isetmax - Isetmin) - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
             // float setup_current = Isetmin + ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
             float setup_current = (Isetmin + avg_setup * (Isetmax - Isetmin) / ADCmax); // линейно
-            float Isetminlimit = 0;//(float)current_xx / 1000.0f;
+            float Isetminlimit = 0;                                                     //(float)current_xx / 1000.0f;
             if (Isetmin > Isetminlimit)
                 Isetminlimit = Isetmin;
 
@@ -385,7 +397,7 @@ void adc_task(void *arg)
                     run_stage = 4;
                 }
             }
-
+            
             if (run_stage == 4) // Хол Ход
             {
                 int xx = current_xx + Iconst * 1000.0f;
@@ -394,7 +406,7 @@ void adc_task(void *arg)
                     run_stage = 5;
                     pid_handle->integral_err = (setup_speed - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                     // pid_handle->integral_err = (avg_setup * UINT8_MAX / ADCmax - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
-                    //  pid_handle->integral_err = ((setup_current - Isetminlimit) * UINT8_MAX / (Isetmax - Isetmin) - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
+                    // pid_handle->integral_err = ((setup_current - Isetminlimit) * UINT8_MAX / (Isetmax - Isetmin) - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                 }
 
                 int xxm = (Imin - Iconst) * 1000.0f;
@@ -487,19 +499,18 @@ void adc_task(void *arg)
             if (setup_speed > UINT8_MAX)
                 setup_speed = UINT8_MAX;
 
-            pid_handle->max_output = setup_speed + (UINT8_MAX * 15 / 100);
+            pid_handle->max_output = setup_speed + (UINT8_MAX * OVRSpeed / 100.0);
             pid_handle->min_output = setup_speed / 10;
+            if (pid_handle->min_output < DACMinOut)
+                pid_handle->min_output = DACMinOut;
             pid_handle->max_integral = pid_handle->max_output;
             ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
 
-            dac1 = (int)ret_result;
-
-            if ((int)ret_result > UINT8_MAX)
+            if (run_stage == 5) // автоматический режим работы
             {
-                dac1 = UINT8_MAX;
+                dac1 = (int)ret_result;
             }
-
-            if (run_stage != 5) // не автомат
+            else
             {
                 dac1 = setup_speed;
 
