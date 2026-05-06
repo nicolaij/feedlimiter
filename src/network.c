@@ -313,7 +313,7 @@ static esp_err_t menu_post_handler(httpd_req_t *req)
         *e = '\0';
         strncpy(name, s, sizeof(name));
         float v = 0;
-        if (strncmp(name, "ip", 2) == 0)
+        if (strncmp(name, "ipaddr", 2) == 0)
         {
             int parsed = sscanf((const char *)e + 1, "%hhu.%hhu.%hhu.%hhu", &addr[0], &addr[1], &addr[2], &addr[3]);
             if (parsed == 4)
