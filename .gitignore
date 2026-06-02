@@ -2,3 +2,4 @@
 .vscode
 managed_components
 logs
+dependencies.lock
