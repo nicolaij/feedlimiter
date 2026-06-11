@@ -134,7 +134,7 @@ void wifi_init_softap(uint8_t channel, uint8_t ssid_hidden)
 
     wifi_config.ap.ssid_len = snprintf((char *)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid), "%s%.0f", AP_WIFI_SSID, get_menu_val_by_id("idn"));
 
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_AP, WIFI_BW_HT20)); // иначе не работает 11 канал
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW20)); // иначе не работает 11 канал
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
