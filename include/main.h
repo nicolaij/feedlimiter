@@ -26,7 +26,6 @@
 #define SDA_PIN GPIO_NUM_19
 #define SCL_PIN GPIO_NUM_18
 #define BTN_PIN GPIO_NUM_9
-
 #endif
 
 #define LED_PIN GPIO_NUM_2

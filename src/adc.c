@@ -397,7 +397,7 @@ void adc_task(void *arg)
                     run_stage = 4;
                 }
             }
-            
+
             if (run_stage == 4) // Хол Ход
             {
                 int xx = current_xx + Iconst * 1000.0f;
@@ -686,6 +686,7 @@ void displ_task(void *arg)
 
     // Initialize the display
     tm1637_handle_t tm1637display;
+    uint8_t tm1637char_display[TM1637_MAX_DIGITS];
 
     if (display_type == 0)
     {
@@ -708,6 +709,9 @@ void displ_task(void *arg)
     {
         // Set brightness to medium (0-7", .izm = "", .val range)
         tm1637_set_brightness(tm1637display, 7, true);
+        vTaskDelay(pdMS_TO_TICKS(250));
+
+        tm1637_scroll_text(tm1637display, "HELLO    ", 200);
     }
 
     if (display_type == 2)
@@ -739,7 +743,6 @@ void displ_task(void *arg)
     }
 
     displ_t displ_data;
-    uint8_t tm1637char_display[TM1637_MAX_DIGITS];
 
     uint8_t mac_addr[6];
     int part1 = get_menu_val_by_id("MAC1");

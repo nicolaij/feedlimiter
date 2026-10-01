@@ -59,6 +59,16 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 3.0.3
+  heronet/tm1637:
+    component_hash: 58521a0c21cec99898110e7b78e0e4dbba2a2182fd7b737b631fe33b2dd6aea8
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.2
   idf:
     source:
       type: idf
@@ -67,7 +77,8 @@ direct_dependencies:
 - esp-idf-lib/i2cdev
 - espressif/cmake_utilities
 - espressif/led_strip
+- heronet/tm1637
 - idf
-manifest_hash: a173968dd21e3cf432aaa0058aef1f2d5cebcb668d1a967e76c2dee7679f12ac
-target: esp32
+manifest_hash: 5545da95af3818fb740b25f2b1e77db9b8627bc0d0aa3b7d665c83df40428578
+target: esp32c3
 version: 2.0.0
