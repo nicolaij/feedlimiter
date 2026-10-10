@@ -38,11 +38,10 @@ extern QueueHandle_t xQueueDisplay;
 
 extern int key_mode;
 
-extern int parameters_changed;
-
 adc_continuous_handle_t adc_handle = NULL;
 
-int run_stage = 1;
+volatile int run_stage = 1;
+portMUX_TYPE g_control_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static const char *TAG = "adc";
 
@@ -220,7 +219,7 @@ void adc_task(void *arg)
         if (ret == ESP_ERR_TIMEOUT)
         {
             vTaskDelay(1);
-            break;
+            continue; // не завершаем задачу: таск FreeRTOS не должен возвращаться
         }
 
         if (ret == ESP_ERR_INVALID_STATE)
@@ -292,7 +291,7 @@ void adc_task(void *arg)
 
             current_sum_rms += avgc;
             current_sum += (current_adc_sum / current_adc_count);
-            avg_setup_sum += (setup_adc_sum / setup_adc_count);
+            avg_setup_sum += (setup_adc_count > 0) ? (setup_adc_sum / setup_adc_count) : 0;
             cycle_count++;
 
             if (cycle_count < (CYCLE / 20))
@@ -317,7 +316,13 @@ void adc_task(void *arg)
                 continue;
             }
 
-            if (parameters_changed != 0)
+            int pending_changed;
+            taskENTER_CRITICAL(&g_control_mux);
+            pending_changed = parameters_changed;
+            parameters_changed = 0;
+            taskEXIT_CRITICAL(&g_control_mux);
+
+            if (pending_changed != 0)
             {
                 pid_ctrl_parameter_t params = {.cal_type = PID_CAL_TYPE_POSITIONAL,
                                                .kp = get_menu_val_by_id("pidP"),
@@ -363,7 +368,6 @@ void adc_task(void *arg)
                                     xQueueSend(xQueueDisplay, &displ_data, 100);
                                 }
                 */
-                parameters_changed = 0;
             }
 
             float current = avg_current * k_calc; // in A
@@ -758,7 +762,7 @@ void displ_task(void *arg)
     {
         if (xHandleWifi)
             xTaskNotify(xHandleWifi, NOTYFY_WIFI_ESPNOW, eSetValueWithOverwrite);
-        run_stage = 999;
+        run_stage_set(999);
         vTaskDelay(1200 / portTICK_PERIOD_MS);
         ESP_ERROR_CHECK(esp_now_init());
 

@@ -55,7 +55,26 @@ extern TaskHandle_t xHandleWifi;
 extern TaskHandle_t xHandleADC;
 extern TaskHandle_t xHandleConsole;
 
-extern int run_stage;
+extern volatile int run_stage;
+extern volatile int parameters_changed;
+
+/* Общий спинлок для критических секций над кросс-задачными флагами.
+   Определение — в src/adc.c. */
+extern portMUX_TYPE g_control_mux;
+
+static inline void run_stage_set(int stage)
+{
+    taskENTER_CRITICAL(&g_control_mux);
+    run_stage = stage;
+    taskEXIT_CRITICAL(&g_control_mux);
+}
+
+static inline void parameters_changed_set(int idx)
+{
+    taskENTER_CRITICAL(&g_control_mux);
+    parameters_changed = idx;
+    taskEXIT_CRITICAL(&g_control_mux);
+}
 
 #define NOTYFY_WIFI BIT0
 #define NOTYFY_WIFI_SWITCH BIT10
