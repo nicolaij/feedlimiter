@@ -20,7 +20,7 @@ static led_indicator_handle_t status_led_handle = NULL;
 
 extern QueueHandle_t xQueueDisplay;
 
-int parameters_changed = 0;
+volatile int parameters_changed = 0;
 
 menu_t menu[] = {
     /*0*/ {.id = "idn", .name = "Номер устройства", .izm = "", .val = 1, .min = 1, .max = 1000000},
@@ -354,13 +354,13 @@ void console_task(void *arg)
                     ESP_LOGI("menu", "-------------------------------------------");
                     break;
                 case 51: // all adc = 255
-                    run_stage = 100;
+                    run_stage_set(100);
                     break;
                 case 52: // all adc  = 127
-                    run_stage = 101;
+                    run_stage_set(101);
                     break;
                 case 53: // all adc  = 0
-                    run_stage = 102;
+                    run_stage_set(102);
                     break;
                 case 54: // FreeRTOS INFO
                     ESP_LOGI("info", "Minimum free memory: %lu bytes", esp_get_minimum_free_heap_size());
@@ -500,7 +500,7 @@ static void button_event_cb(void *button_handle, void *user_data)
             wifi_button_mode = 1;
             ESP_ERROR_CHECK(led_indicator_start(status_led_handle, BLINK_TEST_BLINK_LOOP));
 
-            run_stage = 999;
+            run_stage_set(999);
 
             if (xHandleWifi)
                 xTaskNotify(xHandleWifi, NOTYFY_WIFI_SWITCH | NOTYFY_WIFI, eSetValueWithOverwrite);

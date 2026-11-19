@@ -651,23 +651,23 @@ static esp_err_t websocket_handler(httpd_req_t *req)
 
     if (strncmp("DAC=255", (const char *)ws_frame.payload, 7) == 0)
     {
-        run_stage = 100;
+        run_stage_set(100);
     }
     if (strncmp("DAC=127", (const char *)ws_frame.payload, 7) == 0)
     {
-        run_stage = 101;
+        run_stage_set(101);
     }
     if (strncmp("DAC=0", (const char *)ws_frame.payload, 5) == 0)
     {
-        run_stage = 102;
+        run_stage_set(102);
     }
     if (strncmp("Current=10", (const char *)ws_frame.payload, 10) == 0)
     {
-        run_stage = 110;
+        run_stage_set(110);
     }
     if (strncmp("Current=50", (const char *)ws_frame.payload, 10) == 0)
     {
-        run_stage = 111;
+        run_stage_set(111);
     }
 
     free(payload_buffer);
@@ -784,7 +784,12 @@ void wifi_task(void *arg)
         }
 
         /* Start the server for the first time */
-        start_webserver();
+        if (s_httpd) // предыдущий экземпляр мог остаться после STOP
+        {
+            httpd_stop(s_httpd);
+            s_httpd = NULL;
+        }
+        s_httpd = start_webserver();
 
         /* Mark current app as valid */
         const esp_partition_t *running_partition = esp_ota_get_running_partition();

@@ -39,7 +39,8 @@ extern int parameters_changed;
 
 adc_continuous_handle_t adc_handle = NULL;
 
-int run_stage = 1;
+volatile int run_stage = 1;
+portMUX_TYPE g_control_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static const char *TAG = "adc";
 
@@ -345,7 +346,13 @@ void adc_task(void *arg)
                 continue;
             }
 
-            if (parameters_changed != 0)
+            int pending_changed;
+            taskENTER_CRITICAL(&g_control_mux);
+            pending_changed = parameters_changed;
+            parameters_changed = 0;
+            taskEXIT_CRITICAL(&g_control_mux);
+
+            if (pending_changed != 0)
             {
                 float pid_kp;
                 float pid_ki;
@@ -397,7 +404,6 @@ void adc_task(void *arg)
                                     xQueueSend(xQueueDisplay, &displ_data, 100);
                                 }
                 */
-                parameters_changed = 0;
             }
 
             // Текущий ток в А
