@@ -1,3 +1,5 @@
 dependencies:
   heronet/tm1637: "*"
-  
+  espressif/button: "*"
+  esp-idf-lib/ht16k33: "*"
+  espressif/led_indicator: "*"

@@ -1,0 +1,15 @@
+# Keep text files normalized in Git and checked out with CRLF on Windows.
+* text=auto
+*.c text eol=crlf
+*.h text eol=crlf
+*.cpp text eol=crlf
+*.ini text eol=crlf
+*.csv text eol=crlf
+*.yml text eol=crlf
+*.yaml text eol=crlf
+*.md text eol=crlf
+*.txt text eol=crlf
+sdkconfig.* text eol=crlf
+*.docx binary
+*.bin binary
+*.log binary

@@ -13,6 +13,7 @@ QueueHandle_t xQueueDisplay;
 TaskHandle_t xHandleWifi = NULL;
 TaskHandle_t xHandleADC = NULL;
 TaskHandle_t xHandleConsole = NULL;
+SemaphoreHandle_t xWifiReadySemaphore = NULL;
 
 void app_main()
 {
@@ -21,14 +22,18 @@ void app_main()
     read_nvs_menu();
 
     xQueueDisplay = xQueueCreate(1, sizeof(displ_t));
+    xWifiReadySemaphore = xSemaphoreCreateBinary();
+    if (xWifiReadySemaphore == NULL)
+        ESP_LOGE("main", "Failed to create WiFi ready semaphore");
+
+    xTaskCreate(wifi_task, "wifi_task", 1024 * 3, NULL, configMAX_PRIORITIES - 12, &xHandleWifi);
+
 #if !defined DISPLAY_ONLY
     xTaskCreate(adc_task, "adc_task", 1024 * 8, NULL, configMAX_PRIORITIES - 10, &xHandleADC);
 #endif
-    xTaskCreate(btn_task, "btn_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
+    xTaskCreate(button_task, "button_task", 1024 * 4, NULL, configMAX_PRIORITIES - 15, NULL);
     xTaskCreate(console_task, "console_task", 1024 * 4, NULL, configMAX_PRIORITIES - 16, &xHandleConsole);
-    xTaskCreate(displ_task, "displ_task", 1024 * 6, NULL, configMAX_PRIORITIES - 17, NULL);
-
-    xTaskCreate(wifi_task, "wifi_task", 1024 * 3, NULL, configMAX_PRIORITIES - 12, &xHandleWifi);
+    xTaskCreate(display_task, "display_task", 1024 * 6, NULL, configMAX_PRIORITIES - 17, NULL);
 
     while (1)
     {

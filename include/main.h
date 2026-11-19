@@ -55,6 +55,8 @@ extern TaskHandle_t xHandleWifi;
 extern TaskHandle_t xHandleADC;
 extern TaskHandle_t xHandleConsole;
 
+extern SemaphoreHandle_t xWifiReadySemaphore; // given by wifi_task after esp_wifi_start()
+
 extern int run_stage;
 
 #define NOTYFY_WIFI BIT0
@@ -72,14 +74,14 @@ esp_err_t read_nvs_menu();
 float get_menu_val_by_id(const char *id);
 esp_err_t set_menu_val_by_id(const char *id, float value);
 
-void btn_task(void *arg);
+void button_task(void *arg);
 void console_task(void *arg);
 void adc_task(void *arg);
-void displ_task(void *arg);
+void display_task(void *arg);
 void wifi_task(void *arg);
 
-int get_menu_html(char *buf);
+int build_menu_html(char *output_buffer);
 
-esp_err_t ws_send_data(const char *str, const int len);
+esp_err_t ws_send_text(const char *payload, const int payload_length);
 
 #endif

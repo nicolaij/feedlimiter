@@ -1,7 +1,0 @@
-dependencies:
-  esp-idf-lib/ht16k33:
-    version: '*'
-  esp-idf-lib/i2cdev:
-    version: '*'
-description: default
-version: 1.0.0

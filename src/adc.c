@@ -1,8 +1,10 @@
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "esp_err.h"
 #include "esp_partition.h"
+#include "esp_system.h"
 
 #include "driver/gpio.h"
 
@@ -29,14 +31,9 @@
 
 #define POINTS10 200 // измерений на канал каждых 20 мс
 #define CYCLE 200    // ms
-
-extern int setup_current_changed;
-
-static TaskHandle_t s_task_handle;
+#define ADC_READ_TIMEOUT_MS 1000
 
 extern QueueHandle_t xQueueDisplay;
-
-extern int key_mode;
 
 extern int parameters_changed;
 
@@ -46,24 +43,52 @@ int run_stage = 1;
 
 static const char *TAG = "adc";
 
-#define MEDIAN(a) (MAX(a[0], a[1]) == MAX(a[1], a[2])) ? MAX(a[0], a[2]) : MAX(a[1], MIN(a[0], a[2]))
-#define INRANGE(value, min, max) (value < max) && (value > min)
-
-static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t adc_handle, const adc_continuous_evt_data_t *edata, void *user_data)
-{
-    BaseType_t mustYield = pdFALSE;
-    // Notify that ADC continuous driver has done enough number of conversions
-    vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
-
-    return (mustYield == pdTRUE);
-}
+#define MEDIAN(a) (((MAX(a[0], a[1]) == MAX(a[1], a[2])) ? MAX(a[0], a[2]) : MAX(a[1], MIN(a[0], a[2]))))
+#define INRANGE(value, min, max) (((value) < (max)) && ((value) > (min)))
 
 #if !defined DISPLAY_ONLY
 
-dac_oneshot_handle_t chan1_handle;
-dac_oneshot_handle_t chan2_handle;
+dac_oneshot_handle_t feed_dac_handle;
+dac_oneshot_handle_t display_dac_handle;
 
-static void continuous_adc_init()
+static uint8_t dac_clamp(float dac_value)
+{
+    if (!isfinite(dac_value) || dac_value <= 0.0f)
+        return 0;
+    if (dac_value >= UINT8_MAX)
+        return UINT8_MAX;
+    return (uint8_t)(dac_value + 0.5f);
+}
+
+static void adc_restart(uint32_t delay_ms)
+{
+    dac_oneshot_output_voltage(feed_dac_handle, 0);
+    dac_oneshot_output_voltage(display_dac_handle, 0);
+
+    esp_err_t err = adc_continuous_stop(adc_handle);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+        ESP_LOGW(TAG, "ADC stop: %s", esp_err_to_name(err));
+
+    vTaskDelay(pdMS_TO_TICKS(delay_ms));
+
+    err = adc_continuous_start(adc_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "ADC restart failed: %s", esp_err_to_name(err));
+        esp_restart();
+    }
+
+    run_stage = 1;
+}
+
+static void load_pid_params(float *kp, float *ki, float *kd)
+{
+    *kp = get_menu_val_by_id("pidP");
+    *ki = get_menu_val_by_id("pidI");
+    *kd = get_menu_val_by_id("pidD");
+}
+
+static void adc_continuous_init()
 {
     adc_continuous_handle_cfg_t adc_config = {
         .max_store_buf_size = POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES * 2,
@@ -71,14 +96,14 @@ static void continuous_adc_init()
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
-    adc_continuous_config_t dig_cfg = {
+    adc_continuous_config_t adc_digi_config = {
         .sample_freq_hz = 20000,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
     };
 
     adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
-    dig_cfg.pattern_num = 2;
+    adc_digi_config.pattern_num = 2;
 
     adc_pattern[0].atten = ADC_ATTEN_DB_12;
     adc_pattern[0].channel = ADC_CHANNEL_CURRENT;
@@ -90,118 +115,113 @@ static void continuous_adc_init()
     adc_pattern[1].unit = ADC_UNIT_1;
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
-    dig_cfg.adc_pattern = adc_pattern;
-    ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
+    adc_digi_config.adc_pattern = adc_pattern;
+    ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &adc_digi_config));
 
-    dac_oneshot_config_t chan1_cfg = {
+    dac_oneshot_config_t feed_dac_config = {
         .chan_id = DAC_CHAN_0,
     };
-    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan1_cfg, &chan1_handle));
+    ESP_ERROR_CHECK(dac_oneshot_new_channel(&feed_dac_config, &feed_dac_handle));
 
-    dac_oneshot_config_t chan2_cfg = {
+    dac_oneshot_config_t display_dac_config = {
         .chan_id = DAC_CHAN_1,
     };
-    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan2_cfg, &chan2_handle));
+    ESP_ERROR_CHECK(dac_oneshot_new_channel(&display_dac_config, &display_dac_handle));
 }
 
 void adc_task(void *arg)
 {
-    esp_err_t ret;
-    uint32_t ret_num = 0;
-    uint8_t result[POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES] = {0};
-    int median_filter_current[3];
-    uint8_t median_filter_current_fill = 0;
-    int median_filter_setup[3];
-    uint8_t median_filter_setup_fill = 0;
-    int digital_filter;
+    esp_err_t err;
+    uint32_t bytes_read = 0;
+    uint8_t adc_buffer[POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES] = {0};
+    int current_median_samples[3];
+    uint8_t current_median_count = 0;
+    int setpoint_median_samples[3];
+    uint8_t setpoint_median_count = 0;
+    int filtered_sample;
 
-    int current_offset = 0;
-    int current_offset_set = 5;
-    float current_offset_sum = 0;
+    int adc_zero_offset = 0;
+    bool zero_offset_calibrated = false;
 
-    int cycle_count = 0;
-    int current_sum_rms = 0;
-    int current_sum = 0;
+    int cycles_in_window = 0;
+    int current_rms_sum = 0;
+    int current_raw_sum = 0;
 
-    int avg_setup_sum = 0;
+    int setpoint_raw_sum = 0;
 
-    int currents[UINT8_MAX + 1]; // in mA
-    uint8_t currents_cnt = 0;
+    int current_history_ma[UINT8_MAX + 1] = {0}; // in mA
+    uint8_t history_index = 0;
+    uint8_t history_count = 0;
 
-    int current_xx = 0; // in mA
+    int idle_current_ma = 0; // in mA
 
-    int err_count = 0;
-
-    int sw1 = 0;
+    int feed_forward_state = 0;
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.pin_bit_mask = BIT64(FEED_FORWARD_PIN) | BIT64(DISABLE_PIN);
+    gpio_config_t io_config = {};
+    io_config.intr_type = GPIO_INTR_DISABLE;
+    io_config.pin_bit_mask = BIT64(FEED_FORWARD_PIN) | BIT64(DISABLE_PIN);
     // set as input mode
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    io_config.mode = GPIO_MODE_INPUT;
+    io_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_config));
 
-    s_task_handle = xTaskGetCurrentTaskHandle();
-
-    float k_calc = get_menu_val_by_id("Kcalc");
-    float k_display = get_menu_val_by_id("Kdispl");
-    float Isetmin = get_menu_val_by_id("Isetmin");
-    float Isetmax = get_menu_val_by_id("Isetmax");
+    float adc_to_amps = get_menu_val_by_id("Kcalc");
+    float amps_to_dac = get_menu_val_by_id("Kdispl");
+    float target_current_min_a = get_menu_val_by_id("Isetmin");
+    float target_current_max_a = get_menu_val_by_id("Isetmax");
     // float Iporog = get_menu_val_by_id("Iporog");
-    float ADCmax = get_menu_val_by_id("ADCmax");
-    float ADCk1 = get_menu_val_by_id("ADCk1"); // линейность
+    float setpoint_adc_max = get_menu_val_by_id("ADCmax");
+    float setpoint_curve_exponent = get_menu_val_by_id("ADCkLin"); // степень 0..1..10000
 
-    current_offset = get_menu_val_by_id("offsetADC");
+    adc_zero_offset = get_menu_val_by_id("offsetADC");
+    zero_offset_calibrated = (adc_zero_offset != 0);
 
-    float Imin = get_menu_val_by_id("Imin");
-    float Imax = get_menu_val_by_id("Imax");
-    float Iconst = get_menu_val_by_id("Iconst");
+    float idle_current_min_a = get_menu_val_by_id("Imin");
+    float idle_current_max_a = get_menu_val_by_id("Imax");
+    float idle_current_tolerance_a = get_menu_val_by_id("Iconst");
+
+    float position_min_pct = get_menu_val_by_id("Ipolmin");
+    float position_max_pct = get_menu_val_by_id("Ipolmax");
 
     // Увелич. скорости при работе ПИД
-    float OVRSpeed = get_menu_val_by_id("OVRSpeed");
+    float pid_overspeed_pct = get_menu_val_by_id("OVRSpeed");
 
     // DAC.Минимальная скорость пиления
-    float DACMinOut = get_menu_val_by_id("DACMinOut");
+    float min_feed_dac = get_menu_val_by_id("DACMinOut");
 
-    displ_t displ_data;
+    displ_t display_data;
 
-    pid_ctrl_block_handle_t pid_handle;
+    pid_ctrl_block_handle_t pid;
 
-    pid_ctrl_config_t pid_conf = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                  .init_param.kp = get_menu_val_by_id("pidP"),
-                                  .init_param.ki = get_menu_val_by_id("pidI"),
-                                  .init_param.kd = get_menu_val_by_id("pidD"),
+    float pid_kp;
+    float pid_ki;
+    float pid_kd;
+    load_pid_params(&pid_kp, &pid_ki, &pid_kd);
+
+    pid_ctrl_config_t pid_config = {.init_param.cal_type = PID_CAL_TYPE_POSITIONAL,
+                                  .init_param.kp = pid_kp,
+                                  .init_param.ki = pid_ki,
+                                  .init_param.kd = pid_kd,
                                   .init_param.max_integral = 255,
                                   .init_param.min_integral = 0,
                                   .init_param.max_output = 255,
                                   .init_param.min_output = 0};
 
-    continuous_adc_init();
+    adc_continuous_init();
 
-    ESP_ERROR_CHECK(pid_new_control_block(&pid_conf, &pid_handle));
-
-    adc_continuous_evt_cbs_t cbs = {
-        .on_conv_done = s_conv_done_cb,
-    };
-
-    // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
+    ESP_ERROR_CHECK(pid_new_control_block(&pid_config, &pid));
 
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
     // adc_ll_digi_set_convert_limit_num(2);
 
-    int64_t time1 = esp_timer_get_time();
-    int64_t time2 = esp_timer_get_time();
+    int64_t cycle_start_us = esp_timer_get_time();
+    int64_t cycle_end_us = esp_timer_get_time();
 
-    float input_error = 0;
-
-    float ADCk2 = (UINT8_MAX - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
-    if (ADCk2 < 0)
-        ADCk2 = 0;
-    float setup_speed = 0;
+    float current_error_a = 0;
+    float feed_speed = 0;
 
     while (1)
     {
@@ -209,76 +229,78 @@ void adc_task(void *arg)
 
         // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        adc_digi_output_data_t *p = (void *)result;
-        int current_adc_square = 0;
-        int current_adc_sum = 0;
-        int current_adc_count = 0;
-        int setup_adc_sum = 0;
-        int setup_adc_count = 0;
+        adc_digi_output_data_t *adc_sample = (void *)adc_buffer;
+        int64_t current_square_sum = 0;
+        int current_sample_sum = 0;
+        int current_sample_count = 0;
+        int setpoint_sample_sum = 0;
+        int setpoint_sample_count = 0;
 
-        ret = adc_continuous_read(adc_handle, result, POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES, &ret_num, ADC_MAX_DELAY);
-        if (ret == ESP_ERR_TIMEOUT)
+        err = adc_continuous_read(adc_handle, adc_buffer, POINTS10 * 2 * SOC_ADC_DIGI_RESULT_BYTES, &bytes_read, ADC_READ_TIMEOUT_MS);
+        if (err != ESP_OK)
         {
-            vTaskDelay(1);
-            break;
-        }
-
-        if (ret == ESP_ERR_INVALID_STATE)
-        {
-            dac_oneshot_output_voltage(chan1_handle, 0); // stop
-            dac_oneshot_output_voltage(chan2_handle, 0);
-            vTaskDelay(portMAX_DELAY);
+            ESP_LOGW(TAG, "ADC read failed (%s), restarting", esp_err_to_name(err));
+            memset(current_history_ma, 0, sizeof(current_history_ma));
+            history_index = 0;
+            history_count = 0;
+            current_median_count = 0;
+            setpoint_median_count = 0;
+            cycles_in_window = 0;
+            current_rms_sum = 0;
+            current_raw_sum = 0;
+            setpoint_raw_sum = 0;
+            adc_restart(100);
             continue;
         }
 
-        while ((uint8_t *)p < result + ret_num)
+        while ((uint8_t *)adc_sample < adc_buffer + bytes_read)
         {
-            switch (p->type1.channel)
+            switch (adc_sample->type1.channel)
             {
             case ADC_CHANNEL_CURRENT: // измерения тока
-                median_filter_current[median_filter_current_fill % 3] = p->type1.data;
-                median_filter_current_fill++;
+                current_median_samples[current_median_count % 3] = adc_sample->type1.data;
+                current_median_count++;
 
-                if (median_filter_current_fill >= 3)
+                if (current_median_count >= 3)
                 {
-                    digital_filter = MEDIAN(median_filter_current);
-                    if (median_filter_current_fill >= 6)
-                        median_filter_current_fill = 3;
+                    filtered_sample = MEDIAN(current_median_samples);
+                    if (current_median_count >= 6)
+                        current_median_count = 3;
                 }
                 else
                 {
-                    digital_filter = p->type1.data;
+                    filtered_sample = adc_sample->type1.data;
                 }
 
-                current_adc_square += (digital_filter - current_offset) * (digital_filter - current_offset);
-                current_adc_sum += digital_filter;
-                current_adc_count++;
+                int64_t delta = filtered_sample - adc_zero_offset;
+                current_square_sum += delta * delta;
+                current_sample_sum += filtered_sample;
+                current_sample_count++;
                 break;
 
             case ADC_CHANNEL_SET: // задание тока
-                median_filter_setup[median_filter_setup_fill % 3] = p->type1.data;
-                median_filter_setup_fill++;
+                setpoint_median_samples[setpoint_median_count % 3] = adc_sample->type1.data;
+                setpoint_median_count++;
 
-                if (median_filter_setup_fill >= 3)
+                if (setpoint_median_count >= 3)
                 {
-                    digital_filter = MEDIAN(median_filter_setup);
-                    if (median_filter_setup_fill >= 6)
-                        median_filter_setup_fill = 3;
+                    filtered_sample = MEDIAN(setpoint_median_samples);
+                    if (setpoint_median_count >= 6)
+                        setpoint_median_count = 3;
                 }
                 else
                 {
-                    digital_filter = p->type1.data;
+                    filtered_sample = adc_sample->type1.data;
                 }
 
-                setup_adc_sum += digital_filter;
-                setup_adc_count++;
+                setpoint_sample_sum += filtered_sample;
+                setpoint_sample_count++;
                 break;
 
             default:
-                err_count++;
                 break;
             }
-            p++;
+            adc_sample++;
         }
 
         // time2 = esp_timer_get_time();
@@ -286,67 +308,79 @@ void adc_task(void *arg)
         // continue;
 
         // обработка
-        if (current_adc_count > 0)
+        if (current_sample_count > 0)
         {
-            int avgc = roundf(sqrtf(current_adc_square / current_adc_count));
-
-            current_sum_rms += avgc;
-            current_sum += (current_adc_sum / current_adc_count);
-            avg_setup_sum += (setup_adc_sum / setup_adc_count);
-            cycle_count++;
-
-            if (cycle_count < (CYCLE / 20))
+            if (setpoint_sample_count == 0)
             {
                 continue;
             }
 
-            float avg_current = current_sum_rms / cycle_count;
-            int avg_setup = avg_setup_sum / cycle_count;
-            int offset = current_sum / cycle_count;
+            int rms_sample = roundf(sqrtf((float)current_square_sum / current_sample_count));
 
-            cycle_count = 0;
-            current_sum_rms = 0;
-            current_sum = 0;
-            avg_setup_sum = 0;
+            current_rms_sum += rms_sample;
+            current_raw_sum += (current_sample_sum / current_sample_count);
+            setpoint_raw_sum += (setpoint_sample_sum / setpoint_sample_count);
+            cycles_in_window++;
 
-            if (current_offset == 0)
+            if (cycles_in_window < (CYCLE / 20))
+            {
+                continue;
+            }
+
+            float average_rms_adc = current_rms_sum / cycles_in_window;
+            int average_setpoint_adc = setpoint_raw_sum / cycles_in_window;
+            int measured_zero_offset = current_raw_sum / cycles_in_window;
+
+            cycles_in_window = 0;
+            current_rms_sum = 0;
+            current_raw_sum = 0;
+            setpoint_raw_sum = 0;
+
+            if (!zero_offset_calibrated)
             {
                 run_stage = 1;
-                current_offset = offset;
-                ESP_LOGW("main", "ADC current offset: %d", current_offset);
+                adc_zero_offset = measured_zero_offset;
+                zero_offset_calibrated = true;
+                ESP_LOGW("main", "ADC current offset: %d", adc_zero_offset);
                 continue;
             }
 
             if (parameters_changed != 0)
             {
-                pid_ctrl_parameter_t params = {.cal_type = PID_CAL_TYPE_POSITIONAL,
-                                               .kp = get_menu_val_by_id("pidP"),
-                                               .ki = get_menu_val_by_id("pidI"),
-                                               .kd = get_menu_val_by_id("pidD"),
+                float pid_kp;
+                float pid_ki;
+                float pid_kd;
+                load_pid_params(&pid_kp, &pid_ki, &pid_kd);
+
+                pid_ctrl_parameter_t pid_parameters = {.cal_type = PID_CAL_TYPE_POSITIONAL,
+                                               .kp = pid_kp,
+                                               .ki = pid_ki,
+                                               .kd = pid_kd,
                                                .max_integral = 255,
                                                .min_integral = 0,
                                                .max_output = 255,
                                                .min_output = 0};
 
-                pid_update_parameters(pid_handle, &params);
+                pid_update_parameters(pid, &pid_parameters);
 
-                k_calc = get_menu_val_by_id("Kcalc");
-                k_display = get_menu_val_by_id("Kdispl");
-                Isetmin = get_menu_val_by_id("Isetmin");
-                Isetmax = get_menu_val_by_id("Isetmax");
+                adc_to_amps = get_menu_val_by_id("Kcalc");
+                amps_to_dac = get_menu_val_by_id("Kdispl");
+                target_current_min_a = get_menu_val_by_id("Isetmin");
+                target_current_max_a = get_menu_val_by_id("Isetmax");
+                position_min_pct = get_menu_val_by_id("Ipolmin");
+                position_max_pct = get_menu_val_by_id("Ipolmax");
                 // Iporog = get_menu_val_by_id("Iporog");
-                ADCmax = get_menu_val_by_id("ADCmax");
-                Imin = get_menu_val_by_id("Imin");
-                Imax = get_menu_val_by_id("Imax");
-                Iconst = get_menu_val_by_id("Iconst");
-                ADCk1 = get_menu_val_by_id("ADCk1"); // линейность
+                setpoint_adc_max = get_menu_val_by_id("ADCmax");
+                idle_current_min_a = get_menu_val_by_id("Imin");
+                idle_current_max_a = get_menu_val_by_id("Imax");
+                idle_current_tolerance_a = get_menu_val_by_id("Iconst");
+                setpoint_curve_exponent = get_menu_val_by_id("ADCkLin"); // степень 0..1..10000
 
-                ADCk2 = (UINT8_MAX - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
-                if (ADCk2 < 0)
-                    ADCk2 = 0;
+                pid_overspeed_pct = get_menu_val_by_id("OVRSpeed");
+                min_feed_dac = get_menu_val_by_id("DACMinOut");
 
-                OVRSpeed = get_menu_val_by_id("OVRSpeed");
-                DACMinOut = get_menu_val_by_id("DACMinOut");
+                adc_zero_offset = get_menu_val_by_id("offsetADC");
+                zero_offset_calibrated = (adc_zero_offset != 0);
 
                 /*
                                 if (parameters_changed == -1)
@@ -366,51 +400,107 @@ void adc_task(void *arg)
                 parameters_changed = 0;
             }
 
-            float current = avg_current * k_calc; // in A
-            currents[currents_cnt] = (current * 1000.0f);
+            // Текущий ток в А
+            float current_a = average_rms_adc * adc_to_amps; // in A
+            if (!isfinite(current_a))
+                current_a = 0.0f;
+
+            float current_ma = current_a * 1000.0f;
+            if (!isfinite(current_ma))
+                current_ma = 0.0f;
+            if (current_ma > INT_MAX)
+                current_ma = INT_MAX;
+            else if (current_ma < INT_MIN)
+                current_ma = INT_MIN;
+            current_history_ma[history_index] = (int)current_ma;
+
+            if (history_count < 6)
+                history_count++;
+            bool history_ready = (history_count >= 6);
 
             // float setup_current = (Isetmin + avg_setup / ADCmax * (Isetmax - Isetmin));
             // float ADCk2 = ((Isetmax - Isetmin) - (ADCk1 * ADCmax)) / (ADCmax * ADCmax);
             // float setup_current = Isetmin + ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
-            float setup_current = (Isetmin + avg_setup * (Isetmax - Isetmin) / ADCmax); // линейно
-            float Isetminlimit = 0;                                                     //(float)current_xx / 1000.0f;
-            if (Isetmin > Isetminlimit)
-                Isetminlimit = Isetmin;
+            // float setup_current = (Isetmin + avg_setup * (Isetmax - Isetmin) / ADCmax); // линейно
 
-            if (setup_current < Isetminlimit)
-                setup_current = Isetminlimit;
+            // Линейное положение регулятора 0..100%
+            float setpoint_position_pct = average_setpoint_adc * 100.0f / setpoint_adc_max;
+            if (!isfinite(setpoint_position_pct))
+                setpoint_position_pct = 0.0f;
+            else if (setpoint_position_pct < 0.0f)
+                setpoint_position_pct = 0.0f;
+            else if (setpoint_position_pct > 100.0f)
+                setpoint_position_pct = 100.0f;
 
-            if (setup_current > Isetmax)
-                setup_current = Isetmax;
-
-            input_error = setup_current - current;
-
-            if (run_stage == 5) // пилим
+            // задание тока ~10..30А (Isetmin..Isetmax)
+            float target_current_a = target_current_min_a;
+            float position_span_pct = position_max_pct - position_min_pct;
+            float target_current_span_a = target_current_max_a - target_current_min_a;
+            if (isfinite(position_span_pct) && position_span_pct > 0.0f &&
+                isfinite(target_current_span_a) && target_current_span_a > 0.0f &&
+                isfinite(setpoint_curve_exponent) && setpoint_curve_exponent > 0.0f)
             {
-                int xx = current_xx + Iconst * 1000.0f;
-                if (currents[currents_cnt] < xx &&
-                    currents[(uint8_t)(currents_cnt - 1)] < xx &&
-                    currents[(uint8_t)(currents_cnt - 2)] < xx &&
-                    currents[(uint8_t)(currents_cnt - 3)] < xx &&
-                    currents[(uint8_t)(currents_cnt - 4)] < xx)
+                float position_ratio = (setpoint_position_pct - position_min_pct) / position_span_pct;
+                if (position_ratio < 0.0f)
+                    position_ratio = 0.0f;
+                else if (position_ratio > 1.0f)
+                    position_ratio = 1.0f;
+
+                float curve_ratio = powf(position_ratio, setpoint_curve_exponent);
+                if (isfinite(curve_ratio))
+                    target_current_a = target_current_min_a + curve_ratio * target_current_span_a;
+            }
+
+            if (!isfinite(target_current_a))
+                target_current_a = target_current_min_a;
+            else if (target_current_a < target_current_min_a)
+                target_current_a = target_current_min_a;
+            else if (target_current_a > target_current_max_a)
+                target_current_a = target_current_max_a;
+
+            /*
+                        float Isetminlimit = 0;
+                        //(float)current_xx / 1000.0f;
+                        if (Isetmin > Isetminlimit)
+                            Isetminlimit = Isetmin;
+
+                        if (setup_current < Isetminlimit)
+                            setup_current = Isetminlimit;
+
+                        if (setup_current > Isetmax)
+                            setup_current = Isetmax;
+            */
+            current_error_a = target_current_a - current_a;
+
+            if (run_stage == 5 && history_ready) // пилим
+            {
+                int idle_threshold_ma = idle_current_ma + idle_current_tolerance_a * 1000.0f;
+                if (current_history_ma[history_index] < idle_threshold_ma &&
+                    current_history_ma[(uint8_t)(history_index - 1)] < idle_threshold_ma &&
+                    current_history_ma[(uint8_t)(history_index - 2)] < idle_threshold_ma &&
+                    current_history_ma[(uint8_t)(history_index - 3)] < idle_threshold_ma &&
+                    current_history_ma[(uint8_t)(history_index - 4)] < idle_threshold_ma)
                 {
                     run_stage = 4;
                 }
             }
 
-            if (run_stage == 4) // Хол Ход
+            if (run_stage == 4 && history_ready) // Хол Ход
             {
-                int xx = current_xx + Iconst * 1000.0f;
-                if (currents[currents_cnt] > xx) // врезка
+                int idle_threshold_ma = idle_current_ma + idle_current_tolerance_a * 1000.0f;
+                if (current_history_ma[history_index] > idle_threshold_ma) // врезка
                 {
                     run_stage = 5;
-                    pid_handle->integral_err = (setup_speed - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
+                    if (isfinite(pid->Ki) && pid->Ki > 0.000001f)
+                        pid->integral_err = (feed_speed - current_error_a * pid->Kp - current_error_a * pid->Kd) / pid->Ki;
+                    else
+                        pid->integral_err = 0.0f;
                     // pid_handle->integral_err = (avg_setup * UINT8_MAX / ADCmax - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                     // pid_handle->integral_err = ((setup_current - Isetminlimit) * UINT8_MAX / (Isetmax - Isetmin) - input_error * pid_handle->Kp - input_error * pid_handle->Kd) / pid_handle->Ki;
                 }
 
-                int xxm = (Imin - Iconst) * 1000.0f;
-                if (currents[currents_cnt] < xxm && currents[(uint8_t)(currents_cnt - 1)] < xxm && currents[(uint8_t)(currents_cnt - 2)] < xxm) // ВЫКЛ
+                int stop_threshold_ma = (idle_current_min_a - idle_current_tolerance_a) * 1000.0f;
+                if (current_history_ma[history_index] < stop_threshold_ma && current_history_ma[(uint8_t)(history_index - 1)] < stop_threshold_ma && current_history_ma[(uint8_t)(history_index - 2)] < stop_threshold_ma) // ВЫКЛ
                 {
                     run_stage = 1;
                 }
@@ -421,50 +511,50 @@ void adc_task(void *arg)
             // подача вперед
             if (gpio_get_level(FEED_FORWARD_PIN) == 0)
             {
-                if (sw1 <= 0)
+                if (feed_forward_state <= 0)
                 {
-                    sw1 = 1;
+                    feed_forward_state = 1;
 
-                    if (gpio_get_level(DISABLE_PIN) == 0)
+                    if (gpio_get_level(DISABLE_PIN) == 0 && history_ready)
                         run_stage = 3;
                 }
             }
             else
             {
-                if (sw1 > 0)
-                    sw1 = -1;
+                if (feed_forward_state > 0)
+                    feed_forward_state = -1;
 
                 if (run_stage == 5)
                     run_stage = 4;
             }
 
-            if (run_stage == 3) // фиксируем ХХ
+            if (run_stage == 3 && history_ready) // фиксируем ХХ
             {
-                current_xx = (currents[currents_cnt] + currents[(uint8_t)(currents_cnt - 1)]) / 2;
-                ESP_LOGI("main", "XX: %d", current_xx);
+                idle_current_ma = (current_history_ma[history_index] + current_history_ma[(uint8_t)(history_index - 1)]) / 2;
+                ESP_LOGI("main", "XX: %d", idle_current_ma);
                 // Isetmin = (float)current_xx / 1000.0f;
                 // Iporog = Isetmin + Iconst + 1.0f;
                 run_stage = 4;
             }
 
-            if (run_stage == 2) // ждем стабилизации тока +-1A
+            if (run_stage == 2 && history_ready) // ждем стабилизации тока +-1A
             {
-                int offs = Iconst * 1000.0f;
-                if (INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
-                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 2)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
-                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 3)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
-                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 4)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
-                    INRANGE(currents[currents_cnt], currents[(uint8_t)(currents_cnt - 5)] - offs, currents[(uint8_t)(currents_cnt - 1)] + offs) &&
-                    INRANGE(current, Imin, Imax))
+                int tolerance_ma = idle_current_tolerance_a * 1000.0f;
+                if (INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 1)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 1)] + tolerance_ma) &&
+                    INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 2)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 2)] + tolerance_ma) &&
+                    INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 3)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 3)] + tolerance_ma) &&
+                    INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 4)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 4)] + tolerance_ma) &&
+                    INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 5)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 5)] + tolerance_ma) &&
+                    INRANGE(current_a, idle_current_min_a, idle_current_max_a))
                 {
                     run_stage = 3;
                 }
             }
 
-            if (run_stage == 1) // ловим пуск пилы
+            if (run_stage == 1 && history_ready) // ловим пуск пилы
             {
-                int px = (Imax + Iconst) * 1000.0f;
-                if (currents[currents_cnt] > px && currents[(uint8_t)(currents_cnt - 1)] > px)
+                int start_threshold_ma = (idle_current_max_a + idle_current_tolerance_a) * 1000.0f;
+                if (current_history_ma[history_index] > start_threshold_ma && current_history_ma[(uint8_t)(history_index - 1)] > start_threshold_ma)
                     run_stage = 2;
 
                 // ESP_LOGD("main", "stage: %i Current: %i, %i, %i", run_stage, currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)], currents[(uint8_t)(currents_cnt - 2)]);
@@ -475,160 +565,163 @@ void adc_task(void *arg)
                 if (gpio_get_level(DISABLE_PIN) == 1) // блокировка работы алгоритма
                     run_stage = 1;
 
-                displ_data.curr = current + 0.5; // округление
-                displ_data.dots = true;
-                displ_data.set = setup_current + 0.5; // округление
+                display_data.curr = (current_a > 1000.0f) ? 1000 : ((current_a < -1000.0f) ? -1000 : (int)(current_a + 0.5f)); // округление
+                display_data.dots = true;
+                display_data.set = target_current_a + 0.5; // округление
             }
             else // DEBUG
             {
-                displ_data.curr = avg_setup / 100;
-                displ_data.dots = false;
-                displ_data.set = avg_setup % 100;
+                display_data.curr = average_setpoint_adc / 100;
+                display_data.dots = false;
+                display_data.set = average_setpoint_adc % 100;
             }
 
             // ESP_LOGD("main", "Current: %4.1f A %d", current, displ_data.curr);
 
-            xQueueSend(xQueueDisplay, &displ_data, 0);
+            xQueueSend(xQueueDisplay, &display_data, 0);
 
-            uint8_t dac1 = 0;
-            uint8_t dac2 = 0;
-            static float ret_result = 0;
+            uint8_t feed_dac = 0;
+            uint8_t display_dac = 0;
+            static float pid_output = 0;
             // float intg = pid_handle->integral_err;
 
-            setup_speed = ADCk1 * avg_setup + ADCk2 * avg_setup * avg_setup;
-            if (setup_speed > UINT8_MAX)
-                setup_speed = UINT8_MAX;
+            feed_speed = setpoint_position_pct * UINT8_MAX / 100.0f;
+            if (!isfinite(feed_speed))
+                feed_speed = 0.0f;
+            else if (feed_speed < 0.0f)
+                feed_speed = 0.0f;
+            else if (feed_speed > UINT8_MAX)
+                feed_speed = UINT8_MAX;
 
-            pid_handle->max_output = setup_speed + (UINT8_MAX * OVRSpeed / 100.0);
-            pid_handle->min_output = setup_speed / 10;
-            if (pid_handle->min_output < DACMinOut)
-                pid_handle->min_output = DACMinOut;
-            pid_handle->max_integral = pid_handle->max_output;
-            ESP_ERROR_CHECK(pid_compute(pid_handle, input_error, &ret_result));
+            float pid_max_output = feed_speed + (UINT8_MAX * pid_overspeed_pct / 100.0f);
+            if (!isfinite(pid_max_output) || pid_max_output > UINT8_MAX)
+                pid_max_output = UINT8_MAX;
+            pid->max_output = pid_max_output;
+            // pid_handle->min_output = setup_speed / 10;
+            // if (pid_handle->min_output < DACMinOut)
+            pid->min_output = min_feed_dac;
+            pid->max_integral = pid->max_output;
+            ESP_ERROR_CHECK(pid_compute(pid, current_error_a, &pid_output));
 
             if (run_stage == 5) // автоматический режим работы
             {
-                dac1 = (int)ret_result;
+                feed_dac = dac_clamp(pid_output);
             }
             else
             {
-                dac1 = setup_speed;
+                feed_dac = dac_clamp(feed_speed);
 
-                pid_reset_ctrl_block(pid_handle);
+                pid_reset_ctrl_block(pid);
             }
 
-            if (k_display * setup_current > UINT8_MAX)
-                dac2 = UINT8_MAX;
-            else
-                dac2 = k_display * setup_current;
+            display_dac = dac_clamp(amps_to_dac * target_current_a);
 
             // для отладки
             if (run_stage == 100)
             {
-                dac1 = UINT8_MAX;
-                dac2 = UINT8_MAX;
+                feed_dac = UINT8_MAX;
+                display_dac = UINT8_MAX;
             }
             else if (run_stage == 101)
             {
-                dac1 = UINT8_MAX / 2;
-                dac2 = UINT8_MAX / 2;
+                feed_dac = UINT8_MAX / 2;
+                display_dac = UINT8_MAX / 2;
             }
             else if (run_stage == 102)
             {
-                dac1 = 0;
-                dac2 = 0;
+                feed_dac = 0;
+                display_dac = 0;
             }
             else if (run_stage == 110)
             {
-                current = 10;
-                if (k_display * current > UINT8_MAX)
-                    dac2 = UINT8_MAX;
-                else
-                    dac2 = k_display * current;
+                current_a = 10;
+                display_dac = dac_clamp(amps_to_dac * current_a);
             }
             else if (run_stage == 111)
             {
-                current = 50;
-                if (k_display * current > UINT8_MAX)
-                    dac2 = UINT8_MAX;
-                else
-                    dac2 = k_display * current;
+                current_a = 50;
+                display_dac = dac_clamp(amps_to_dac * current_a);
             }
             else if (run_stage == 999)
             {
-                adc_continuous_stop(adc_handle);
-                vTaskDelay(1500 / portTICK_PERIOD_MS);
-                adc_continuous_start(adc_handle);
-                // adc_ll_digi_set_convert_limit_num(2);
-
-                run_stage = 1;
+                memset(current_history_ma, 0, sizeof(current_history_ma));
+                history_index = 0;
+                history_count = 0;
+                current_median_count = 0;
+                setpoint_median_count = 0;
+                cycles_in_window = 0;
+                current_rms_sum = 0;
+                current_raw_sum = 0;
+                setpoint_raw_sum = 0;
+                adc_restart(1500);
+                continue;
             };
 
-            dac_oneshot_output_voltage(chan1_handle, dac1);
-            dac_oneshot_output_voltage(chan2_handle, dac2);
+            dac_oneshot_output_voltage(feed_dac_handle, feed_dac);
+            dac_oneshot_output_voltage(display_dac_handle, display_dac);
 
-            time2 = esp_timer_get_time();
+            cycle_end_us = esp_timer_get_time();
 
-            char buf[256];
-            int l = snprintf(buf, sizeof(buf), "%d stage: %d %8lld Current: %4.1f A (set: %.1f, ADC: %4d); DAC: %3d, %.0f + %.0f + %.0f", gpio_get_level(FEED_FORWARD_PIN), run_stage, time2 - time1, current, setup_current, avg_setup, dac1, input_error * pid_handle->Kp, pid_handle->integral_err * pid_handle->Ki, (input_error - pid_handle->previous_err2) * pid_handle->Kd);
-            ESP_LOGI("main", "%s", buf);
+            char log_line[256];
+            int log_length = snprintf(log_line, sizeof(log_line), "%d stage: %d %8lld Current: %4.1f A (set: %.1f, ADC: %4d); DAC: %3d, %.0f + %.0f + %.0f", gpio_get_level(FEED_FORWARD_PIN), run_stage, cycle_end_us - cycle_start_us, current_a, target_current_a, average_setpoint_adc, feed_dac, current_error_a * pid->Kp, pid->integral_err * pid->Ki, (current_error_a - pid->previous_err2) * pid->Kd);
+            ESP_LOGI("main", "%s", log_line);
             // printf(">PV:%.1f\n>SP:%.1f\n>MV:%d\n", current, setup_current, dac1);
 
-            ws_send_data(buf, l);
+            if (log_length > 0 && log_length < (int)sizeof(log_line))
+                ws_send_text(log_line, log_length);
 
-            time1 = time2;
-            currents_cnt++;
+            cycle_start_us = cycle_end_us;
+            history_index++;
         }
     }
 }
 
 #endif
 
-static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-#define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_example_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
+#if defined DISPLAY_ONLY
+static uint8_t broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+#define IS_BROADCAST_ADDR(addr) (memcmp(addr, broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
 
-static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len)
+static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *payload, int payload_len)
 {
-    static uint8_t buffer[sizeof(displ_t)];
+    uint8_t *mac_address = recv_info->src_addr;
+    uint8_t *destination_mac = recv_info->des_addr;
 
-    uint8_t *mac_addr = recv_info->src_addr;
-    uint8_t *des_addr = recv_info->des_addr;
-
-    if (mac_addr == NULL || data == NULL || len <= 0)
+    if (mac_address == NULL || payload == NULL || destination_mac == NULL || payload_len <= 0)
     {
         ESP_LOGE(TAG, "Receive cb arg error");
         return;
     }
 
-    if (len == sizeof(displ_t))
+    if (payload_len != sizeof(displ_t))
     {
-        memcpy(buffer, data, len);
-        xQueueSend(xQueueDisplay, &buffer, 0);
+        ESP_LOGW(TAG, "Unexpected ESPNOW payload: %d", payload_len);
+        return;
     }
 
-    if (IS_BROADCAST_ADDR(des_addr))
-    {
+    displ_t display_message;
+    memcpy(&display_message, payload, sizeof(display_message));
+    xQueueSend(xQueueDisplay, &display_message, 0);
 
-        ESP_LOGD(TAG, "Receive broadcast ESPNOW data: %d, %d", ((displ_t *)(data))->curr, ((displ_t *)(data))->set);
-    }
+    if (IS_BROADCAST_ADDR(destination_mac))
+        ESP_LOGD(TAG, "Receive broadcast ESPNOW data: %d, %d", display_message.curr, display_message.set);
     else
-    {
-        ESP_LOGD(TAG, "Receive unicast ESPNOW data: %d, %d", ((displ_t *)(data))->curr, ((displ_t *)(data))->set);
-    }
+        ESP_LOGD(TAG, "Receive unicast ESPNOW data: %d, %d", display_message.curr, display_message.set);
 }
+#endif
 
-void displ_task(void *arg)
+void display_task(void *arg)
 {
 
-    int display_type = 0;
+    int display_kind = 0;
 
     ESP_ERROR_CHECK(i2cdev_init());
 
-    i2c_dev_t i2cdev;
+    i2c_dev_t i2c_dev;
 
-    uint16_t ht16data[4];
+    uint16_t ht16_frame[4];
 
-    uint16_t digits_ht16[10] = {
+    uint16_t ht16_digits[10] = {
         0x003F, // 0
         0x0006, // 1
         0x00DB, // 2
@@ -641,7 +734,7 @@ void displ_task(void *arg)
         0x00EF  // 9
     };
 
-    uint16_t symbols_ht16[] = {
+    uint16_t ht16_symbols[] = {
         0,
         0x1201, // Т
         0x04FD, // В
@@ -662,61 +755,63 @@ void displ_task(void *arg)
         0x2470, // K
     };
 
-    esp_err_t ret;
+    esp_err_t err;
 
-    if (display_type == 0)
+    if (display_kind == 0)
     {
-        ret = ht16k33_init_desc(&i2cdev, 0, SDA_PIN, SCL_PIN, HT16K33_DEFAULT_ADDR) | ht16k33_init(&i2cdev);
-        if (ret != ESP_OK)
+        err = ht16k33_init_desc(&i2c_dev, 0, SDA_PIN, SCL_PIN, HT16K33_DEFAULT_ADDR);
+        if (err == ESP_OK)
+            err = ht16k33_init(&i2c_dev);
+        if (err != ESP_OK)
         {
-            ESP_LOGE("dislay", "Failed to initialize ht16k33: %s", esp_err_to_name(ret));
+            ESP_LOGE("dislay", "Failed to initialize ht16k33: %s", esp_err_to_name(err));
         }
         else
         {
-            display_type = 2;
+            display_kind = 2;
         }
     }
 
     // Configure the display
-    tm1637_config_t tm1637config = {
+    tm1637_config_t tm1637_cfg = {
         .clk_pin = SCL_PIN,
         .dio_pin = SDA_PIN,
         .bit_delay_us = 100 // Default timing
     };
 
     // Initialize the display
-    tm1637_handle_t tm1637display;
-    uint8_t tm1637char_display[TM1637_MAX_DIGITS];
+    tm1637_handle_t tm1637_display;
+    uint8_t tm1637_segments[TM1637_MAX_DIGITS];
 
-    if (display_type == 0)
+    if (display_kind == 0)
     {
         ESP_ERROR_CHECK(i2cdev_done());
 
-        ret = tm1637_init(&tm1637config, &tm1637display);
-        if (ret != ESP_OK)
+        err = tm1637_init(&tm1637_cfg, &tm1637_display);
+        if (err != ESP_OK)
         {
-            ESP_LOGE("dislay", "Failed to initialize TM1637: %s", esp_err_to_name(ret));
+            ESP_LOGE("dislay", "Failed to initialize TM1637: %s", esp_err_to_name(err));
         }
         else
         {
-            display_type = 1;
+            display_kind = 1;
         }
     }
 
     ESP_LOGI("dislay", "Display initialized successfully");
 
-    if (display_type == 1)
+    if (display_kind == 1)
     {
         // Set brightness to medium (0-7", .izm = "", .val range)
-        tm1637_set_brightness(tm1637display, 7, true);
+        tm1637_set_brightness(tm1637_display, 7, true);
         vTaskDelay(pdMS_TO_TICKS(250));
 
-        tm1637_scroll_text(tm1637display, "HELLO    ", 200);
+        tm1637_scroll_text(tm1637_display, "HELLO    ", 200);
     }
 
-    if (display_type == 2)
+    if (display_kind == 2)
     {
-        ESP_ERROR_CHECK(ht16k33_display_setup(&i2cdev, 1, HTK16K33_F_0HZ));
+        ESP_ERROR_CHECK(ht16k33_display_setup(&i2c_dev, 1, HTK16K33_F_0HZ));
         /*
                 for (int i = 0; i < 10; i++)
                 {
@@ -730,93 +825,126 @@ void displ_task(void *arg)
         */
 
         // пилорамка
-        const int hello[17] = {0, 0, 0, 0, 12, 13, 14, 15, 16, 5, 7, 17, 5, 0, 0, 0, 0};
-        for (int i = 0; i < 14; i++)
+        const int saw_symbols[17] = {0, 0, 0, 0, 12, 13, 14, 15, 16, 5, 7, 17, 5, 0, 0, 0, 0};
+        for (int frame_index = 0; frame_index < 14; frame_index++)
         {
-            ht16data[0] = symbols_ht16[hello[i]];
-            ht16data[1] = symbols_ht16[hello[i + 1]];
-            ht16data[2] = symbols_ht16[hello[i + 2]];
-            ht16data[3] = symbols_ht16[hello[i + 3]];
-            ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
+            ht16_frame[0] = ht16_symbols[saw_symbols[frame_index]];
+            ht16_frame[1] = ht16_symbols[saw_symbols[frame_index + 1]];
+            ht16_frame[2] = ht16_symbols[saw_symbols[frame_index + 2]];
+            ht16_frame[3] = ht16_symbols[saw_symbols[frame_index + 3]];
+            ESP_ERROR_CHECK(ht16k33_ram_write(&i2c_dev, (uint8_t *)ht16_frame));
             vTaskDelay(pdMS_TO_TICKS(250));
         }
     }
 
-    displ_t displ_data;
+    displ_t display_data;
 
-    uint8_t mac_addr[6];
-    int part1 = get_menu_val_by_id("MAC1");
-    int part2 = get_menu_val_by_id("MAC2");
-    mac_addr[0] = (part1 >> 16) & 0xFF;
-    mac_addr[1] = (part1 >> 8) & 0xFF;
-    mac_addr[2] = (part1 >> 0) & 0xFF;
-    mac_addr[3] = (part2 >> 16) & 0xFF;
-    mac_addr[4] = (part2 >> 8) & 0xFF;
-    mac_addr[5] = (part2 >> 0) & 0xFF;
+    bool espnow_enabled = true;
 
-    if (part1 != 0 || part2 != 0)
+#if !defined DISPLAY_ONLY
+    uint8_t mac_address[6];
+    int mac_high = get_menu_val_by_id("MAC1");
+    int mac_low = get_menu_val_by_id("MAC2");
+    mac_address[0] = (mac_high >> 16) & 0xFF;
+    mac_address[1] = (mac_high >> 8) & 0xFF;
+    mac_address[2] = (mac_high >> 0) & 0xFF;
+    mac_address[3] = (mac_low >> 16) & 0xFF;
+    mac_address[4] = (mac_low >> 8) & 0xFF;
+    mac_address[5] = (mac_low >> 0) & 0xFF;
+    espnow_enabled = (mac_high != 0 || mac_low != 0);
+#endif
+
+    if (espnow_enabled)
     {
         if (xHandleWifi)
             xTaskNotify(xHandleWifi, NOTYFY_WIFI_ESPNOW, eSetValueWithOverwrite);
         run_stage = 999;
-        vTaskDelay(1200 / portTICK_PERIOD_MS);
-        ESP_ERROR_CHECK(esp_now_init());
 
-        esp_now_peer_info_t peerInfo = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
+        // ESP-NOW requires WiFi to be started before esp_now_init().
+        if (xWifiReadySemaphore)
+        {
+            if (xSemaphoreTake(xWifiReadySemaphore, pdMS_TO_TICKS(5000)) != pdTRUE)
+                ESP_LOGW(TAG, "WiFi ready timeout, retrying ESP-NOW");
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(1200));
+        }
+
+        esp_err_t espnow_err = ESP_FAIL;
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            espnow_err = esp_now_init();
+            if (espnow_err == ESP_OK)
+                break;
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+
+        if (espnow_err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "esp_now_init failed: %s", esp_err_to_name(espnow_err));
+        }
+        else
+        {
+            esp_now_peer_info_t peer_info = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
 #if defined DISPLAY_ONLY
-        // 84:f7:03:41:39:f9
-        ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
+            esp_err_t cb_err = esp_now_register_recv_cb(espnow_recv_cb);
+            if (cb_err != ESP_OK)
+                ESP_LOGE(TAG, "esp_now_register_recv_cb failed: %s", esp_err_to_name(cb_err));
 #else
-        memcpy(peerInfo.peer_addr, mac_addr, ESP_NOW_ETH_ALEN);
+            memcpy(peer_info.peer_addr, mac_address, ESP_NOW_ETH_ALEN);
 #endif
-        esp_now_add_peer(&peerInfo);
+            esp_err_t peer_err = esp_now_add_peer(&peer_info);
+            if (peer_err != ESP_OK && peer_err != ESP_ERR_ESPNOW_EXIST)
+                ESP_LOGE(TAG, "esp_now_add_peer failed: %s", esp_err_to_name(peer_err));
+        }
     }
 
     while (1)
     {
-        if (xQueueReceive(xQueueDisplay, &displ_data, 3000 / portTICK_PERIOD_MS) == pdPASS)
+        if (xQueueReceive(xQueueDisplay, &display_data, 3000 / portTICK_PERIOD_MS) == pdPASS)
         {
-            int val1 = displ_data.curr;
-            if (val1 > 99)
-                val1 = 99;
-            if (val1 < 0)
-                val1 = 0;
+            int display_current = display_data.curr;
+            if (display_current > 99)
+                display_current = 99;
+            if (display_current < 0)
+                display_current = 0;
 
-            int val2 = displ_data.set;
-            if (val2 > 99)
-                val2 = 99;
-            if (val2 < 0)
-                val2 = 0;
+            int display_setpoint = display_data.set;
+            if (display_setpoint > 99)
+                display_setpoint = 99;
+            if (display_setpoint < 0)
+                display_setpoint = 0;
 
-            if (display_type == 1) // tm1637
+            if (display_kind == 1) // tm1637
             {
-                tm1637char_display[0] = (val1 >= 10.0) ? tm1637_encode_digit(val1 / 10) : 0;
-                tm1637char_display[1] = tm1637_encode_digit(val1 % 10) | ((displ_data.dots == true) ? TM1637_SEG_DP : 0);
-                tm1637char_display[2] = tm1637_encode_digit(val2 / 10);
-                tm1637char_display[3] = tm1637_encode_digit(val2 % 10);
+                tm1637_segments[0] = (display_current >= 10.0) ? tm1637_encode_digit(display_current / 10) : 0;
+                tm1637_segments[1] = tm1637_encode_digit(display_current % 10) | ((display_data.dots == true) ? TM1637_SEG_DP : 0);
+                tm1637_segments[2] = tm1637_encode_digit(display_setpoint / 10);
+                tm1637_segments[3] = tm1637_encode_digit(display_setpoint % 10);
 
-                tm1637_set_segments(tm1637display, tm1637char_display, 4, 0);
+                tm1637_set_segments(tm1637_display, tm1637_segments, 4, 0);
             }
 
-            if (display_type == 2) // VK16K33
+            if (display_kind == 2) // VK16K33
             {
-                ht16data[0] = digits_ht16[val1 / 10];
-                ht16data[1] = digits_ht16[val1 % 10] | ((displ_data.dots == true) ? 0x4000 : 0); //+ dot
-                ht16data[2] = digits_ht16[val2 / 10];
-                ht16data[3] = digits_ht16[val2 % 10];
-                ESP_ERROR_CHECK(ht16k33_ram_write(&i2cdev, (uint8_t *)ht16data));
+                ht16_frame[0] = ht16_digits[display_current / 10];
+                ht16_frame[1] = ht16_digits[display_current % 10] | ((display_data.dots == true) ? 0x4000 : 0); //+ dot
+                ht16_frame[2] = ht16_digits[display_setpoint / 10];
+                ht16_frame[3] = ht16_digits[display_setpoint % 10];
+                ESP_ERROR_CHECK(ht16k33_ram_write(&i2c_dev, (uint8_t *)ht16_frame));
             }
 #if !defined DISPLAY_ONLY
-            if (part1 != 0 || part2 != 0)
-                esp_now_send(mac_addr, (uint8_t *)&displ_data, sizeof(displ_t));
+            if (mac_high != 0 || mac_low != 0)
+                esp_now_send(mac_address, (uint8_t *)&display_data, sizeof(displ_t));
 #endif
         }
         else
         {
-            displ_data.curr = 0;
-            displ_data.set = 0;
-            displ_data.dots = 0;
-            xQueueSend(xQueueDisplay, &displ_data, 0);
+            display_data.curr = 0;
+            display_data.set = 0;
+            display_data.dots = 0;
+            xQueueSend(xQueueDisplay, &display_data, 0);
         }
         vTaskDelay(1);
     }

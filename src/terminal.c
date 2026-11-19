@@ -3,6 +3,7 @@
 #include "driver/uart_vfs.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "esp_event.h"
 #include "driver/gpio.h"
 #include "button_gpio.h"
@@ -15,12 +16,7 @@
 
 static const char *TAG = "terminal";
 
-nvs_handle_t my_handle;
-
-static led_indicator_handle_t led_handle_0 = NULL;
-
-int setup_current_active = 25.0;
-int setup_current = 25.0;
+static led_indicator_handle_t status_led_handle = NULL;
 
 extern QueueHandle_t xQueueDisplay;
 
@@ -32,28 +28,55 @@ menu_t menu[] = {
     {.id = "MAC1", .name = "ESPNOW! Target MAC", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
     {.id = "MAC2", .name = "", .izm = "", .val = 0, .min = 0, .max = 0xFFFFFF},
     {.id = "offsetADC", .name = "Смещение 0 ADC", .izm = "", .val = 1360.0, .min = 0, .max = 3000},
-    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.036, .min = 0, .max = 999999},
+    {.id = "Kcalc", .name = "К масшт. ADC -> I", .izm = "", .val = 0.036, .min = 0.000001, .max = 999999},
     {.id = "Kdispl", .name = "К масшт. I -> DAC", .izm = "", .val = 5.0, .min = 0, .max = 999999},
     {.id = "Imin", .name = "Минимально возможный I ХХ дв.", .izm = "А", .val = 10.0, .min = 0, .max = 100},
     {.id = "Imax", .name = "Максимально возможный I ХХ дв.", .izm = "А", .val = 30.0, .min = 0, .max = 100},
     {.id = "Iconst", .name = "Стабильность I ХХ двигателя", .izm = "+-А", .val = 1.0, .min = 0, .max = 100},
     //{.id = "Iporog", .name = "Порог тока при врезке", .izm = "А", .val = 21.0, .min = 0, .max = 100},
     {.id = "Isetmin", .name = "Минимум I задание", .izm = "А", .val = 10.0, .min = 0, .max = 100},
+    {.id = "Ipolmin", .name = "Ограничение мин. положения", .izm = "%", .val = 10.0, .min = 0, .max = 100},
     {.id = "Isetmax", .name = "Максимум I задание", .izm = "А", .val = 30.0, .min = 0, .max = 100},
-    {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3000, .min = 0, .max = 10000},
-    /* ADCk1 = 0 - Максимально квадратичная зависимость
-       ADCk2 = 0 - Линейная зависимость регулятора Для этого ADCk1 = 255/ADCmax */
-    {.id = "ADCk1", .name = "Линейность регулятора", .izm = "", .val = 0.08, .min = 0, .max = 1},
+    {.id = "Ipolmax", .name = "Ограничение макс. положения", .izm = "%", .val = 80.0, .min = 0, .max = 100},
+    {.id = "ADCmax", .name = "Максимум ADC задание", .izm = "", .val = 3000, .min = 1, .max = 10000},
+    /* ADCkLin = <1 - Быстрый старт
+       ADCkLin = 1 - Линейная зависимость регулятора 
+       ADCkLin = >1 - пологий старт
+       */
+    {.id = "ADCkLin", .name = "Степень регулятора", .izm = "", .val = 1, .min = 0.01, .max = 100000},
     {.id = "OVRSpeed", .name = "Увелич. скорости при работе ПИД", .izm = "%", .val = 10, .min = 0, .max = 100},
     {.id = "DACMinOut", .name = "DAC.Минимальная скорость пиления", .izm = "", .val = 3, .min = 0, .max = 200},
     {.id = "pidP", .name = "PID P", .izm = "", .val = 0.1000, .min = 0.000001, .max = 999999},
-    {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0, .max = 999999},
+    {.id = "pidI", .name = "PID I", .izm = "", .val = 1.0, .min = 0.000001, .max = 999999},
     {.id = "pidD", .name = "PID D", .izm = "", .val = 0, .min = 0, .max = 999999},
     //{.id = "pidintMax", .name = "PID Intergal maximum", .izm = "", .val = 255, .min = -999999, .max = 999999},
     //{.id = "pidintMin", .name = "PID Intergal minimum", .izm = "", .val = 0, .min = -999999, .max = 999999},
     //{.id = "pidMax", .name = "PID Out maximum", .izm = "", .val = 255, .min = 0, .max = 999999},
     //{.id = "pidMin", .name = "PID Out minimum", .izm = "", .val = 0, .min = 0, .max = 999999},
 };
+
+static bool is_menu_value_valid(int menu_index, float value)
+{
+    if (!isfinite(value))
+        return false;
+
+    const char *id = menu[menu_index].id;
+
+    if (strcmp(id, "Ipolmin") == 0 && value >= get_menu_val_by_id("Ipolmax"))
+        return false;
+    if (strcmp(id, "Ipolmax") == 0 && value <= get_menu_val_by_id("Ipolmin"))
+        return false;
+    if (strcmp(id, "Isetmin") == 0 && value >= get_menu_val_by_id("Isetmax"))
+        return false;
+    if (strcmp(id, "Isetmax") == 0 && value <= get_menu_val_by_id("Isetmin"))
+        return false;
+    if (strcmp(id, "Imin") == 0 && value >= get_menu_val_by_id("Imax"))
+        return false;
+    if (strcmp(id, "Imax") == 0 && value <= get_menu_val_by_id("Imin"))
+        return false;
+
+    return true;
+}
 
 esp_err_t init_nvs()
 {
@@ -77,186 +100,199 @@ esp_err_t init_nvs()
 esp_err_t read_nvs_menu()
 {
     // Open
-    esp_err_t erro = nvs_open("storage", NVS_READONLY, &my_handle);
-    if (erro != ESP_OK)
+    nvs_handle_t nvs_storage;
+    esp_err_t err = nvs_open("storage", NVS_READONLY, &nvs_storage);
+    if (err != ESP_OK)
     {
-        ESP_LOGE("storage", "Error (%s) opening NVS handle!", esp_err_to_name(erro));
+        ESP_LOGE("storage", "Error (%s) opening NVS handle!", esp_err_to_name(err));
     }
     else
     {
-        for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+        for (int menu_index = 0; menu_index < sizeof(menu) / sizeof(menu_t); menu_index++)
         {
-            size_t s = sizeof(float);
-            esp_err_t err = nvs_get_blob(my_handle, menu[i].id, &menu[i].val, &s);
-            switch (err)
+            size_t value_size = sizeof(float);
+            esp_err_t read_err = nvs_get_blob(nvs_storage, menu[menu_index].id, &menu[menu_index].val, &value_size);
+            switch (read_err)
             {
             case ESP_OK:
-                ESP_LOGD("NVS", "Read \"%s\" = %f", menu[i].name, menu[i].val);
+                ESP_LOGD("NVS", "Read \"%s\" = %f", menu[menu_index].name, menu[menu_index].val);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
-                ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", menu[i].name);
+                ESP_LOGD("NVS", "The value  \"%s\" is not initialized yet!", menu[menu_index].name);
                 break;
             default:
-                ESP_LOGE("NVS", "Error (%s) reading!", esp_err_to_name(err));
+                ESP_LOGE("NVS", "Error (%s) reading!", esp_err_to_name(read_err));
             }
         }
 
         // Close
-        nvs_close(my_handle);
+        nvs_close(nvs_storage);
     }
-    return erro;
+    return err;
 }
 
-int get_menu_pos_by_id(const char *id)
+int get_menu_index_by_id(const char *id)
 {
-    int ll = strlen(id);
-    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    int id_length = strlen(id);
+    for (int menu_index = 0; menu_index < sizeof(menu) / sizeof(menu_t); menu_index++)
     {
-        int l = strlen(menu[i].id);
-        if (ll == l && strncmp(id, menu[i].id, l) == 0)
-            return i;
+        int entry_id_length = strlen(menu[menu_index].id);
+        if (id_length == entry_id_length && strncmp(id, menu[menu_index].id, entry_id_length) == 0)
+            return menu_index;
     }
     return -1;
 }
 
 float get_menu_val_by_id(const char *id)
 {
-    int ll = strlen(id);
-    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    for (int menu_index = 0; menu_index < sizeof(menu) / sizeof(menu_t); menu_index++)
     {
-        int l = strlen(menu[i].id);
-        if (ll == l && strncmp(id, menu[i].id, l) == 0)
-            return menu[i].val;
+        if (strcmp(id, menu[menu_index].id) == 0)
+        {
+            float value = menu[menu_index].val;
+            if (!isfinite(value))
+                value = menu[menu_index].min;
+            if (value < menu[menu_index].min)
+                value = menu[menu_index].min;
+            else if (value > menu[menu_index].max)
+                value = menu[menu_index].max;
+            return value;
+        }
     }
     return 0;
 }
 
 esp_err_t set_menu_val_by_id(const char *id, float value)
 {
-    esp_err_t err = ESP_FAIL;
-    int ll = strlen(id);
-    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    int menu_index = get_menu_index_by_id(id);
+    if (menu_index < 0)
+        return ESP_ERR_NOT_FOUND;
+
+    if (!is_menu_value_valid(menu_index, value))
     {
-        int l = strlen(menu[i].id);
-        if (ll == l && strncmp(id, menu[i].id, l) == 0)
-        {
-            if (menu[i].val != value)
-            {
-                err = nvs_open("storage", NVS_READWRITE, &my_handle);
-                ESP_LOGD("NVS", "Write  \"%s\" : \"%f\"", menu[i].id, value);
-                err = nvs_set_blob(my_handle, id, &value, sizeof(float));
-                menu[i].val = value;
-                vTaskDelay(50 / portTICK_PERIOD_MS);
-                nvs_commit(my_handle);
-                parameters_changed = i;
-            }
-            break;
-        }
+        ESP_LOGW("NVS", "Rejected \"%s\" = %f (min %f, max %f)", id, value, menu[menu_index].min, menu[menu_index].max);
+        return ESP_ERR_INVALID_ARG;
     }
 
-    return err;
-}
+    if (menu[menu_index].val == value)
+        return ESP_OK;
 
-int get_menu_json(char *buf)
-{
-    int pos = 0;
-    buf[pos++] = '{';
-    for (int i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+    nvs_handle_t nvs_storage;
+    esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvs_storage);
+    if (err != ESP_OK)
     {
-        pos += sprintf(&buf[pos], "\"%s\":[\"%s\",%f,\"%s\"]", menu[i].id, menu[i].name, menu[i].val, menu[i].izm);
-        if (i < sizeof(menu) / sizeof(menu_t) - 1)
-            buf[pos++] = ',';
+        ESP_LOGE("NVS", "Error (%s) opening NVS handle!", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGD("NVS", "Write  \"%s\" : \"%f\"", menu[menu_index].id, value);
+    err = nvs_set_blob(nvs_storage, id, &value, sizeof(float));
+    if (err == ESP_OK)
+    {
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        err = nvs_commit(nvs_storage);
+        if (err == ESP_OK)
+        {
+            menu[menu_index].val = value;
+            parameters_changed = menu_index;
+        }
         else
-            buf[pos++] = '}';
-
-        buf[pos] = '\0';
-    }
-    return pos;
-}
-
-int get_menu_html(char *buf)
-{
-    int pos = 0;
-    static int index = 0;
-
-    if (index == 0)
-        pos = sprintf(buf, "<table>");
-
-    while (index < sizeof(menu) / sizeof(menu_t))
-    {
-        if (pos > CONFIG_LWIP_TCP_MSS - 256)
         {
-            return pos;
+            ESP_LOGE("NVS", "Commit failed: %s", esp_err_to_name(err));
         }
-
-        if (index == 1) // MAC
-        {
-            uint8_t mac_addr[6];
-            int part1 = menu[index].val;
-            int part2 = menu[index + 1].val;
-            mac_addr[0] = (part1 >> 16) & 0xFF;
-            mac_addr[1] = (part1 >> 8) & 0xFF;
-            mac_addr[2] = (part1 >> 0) & 0xFF;
-            mac_addr[3] = (part2 >> 16) & 0xFF;
-            mac_addr[4] = (part2 >> 8) & 0xFF;
-            mac_addr[5] = (part2 >> 0) & 0xFF;
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, MAC2STR(mac_addr));
-        }
-        else if (strlen(menu[index].name) > 0)
-        {
-            pos += sprintf(&buf[pos], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/>%s</td></tr>\n", menu[index].id, menu[index].name, menu[index].id, menu[index].id, menu[index].val, menu[index].izm);
-        }
-        else // hidden
-        {
-            pos += sprintf(&buf[pos], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%g\">", menu[index].id, menu[index].id, menu[index].val);
-        }
-
-        index++;
-    }
-
-    if (pos > 0)
-    {
-        pos += sprintf(&buf[pos], "</table><br>");
     }
     else
     {
-        index = 0;
+        ESP_LOGE("NVS", "Write failed: %s", esp_err_to_name(err));
     }
 
-    return pos;
+    nvs_close(nvs_storage);
+    return err;
+}
+
+int build_menu_html(char *output_buffer)
+{
+    int written = 0;
+    static int html_index = 0;
+
+    if (html_index == 0)
+        written = sprintf(output_buffer, "<table>");
+
+    while (html_index < sizeof(menu) / sizeof(menu_t))
+    {
+        if (written > CONFIG_LWIP_TCP_MSS - 256)
+        {
+            return written;
+        }
+
+        float value = get_menu_val_by_id(menu[html_index].id);
+
+        if (html_index == 1) // MAC
+        {
+            uint8_t mac_address[6];
+            int mac_high = get_menu_val_by_id(menu[html_index].id);
+            int mac_low = get_menu_val_by_id(menu[html_index + 1].id);
+            mac_address[0] = (mac_high >> 16) & 0xFF;
+            mac_address[1] = (mac_high >> 8) & 0xFF;
+            mac_address[2] = (mac_high >> 0) & 0xFF;
+            mac_address[3] = (mac_low >> 16) & 0xFF;
+            mac_address[4] = (mac_low >> 8) & 0xFF;
+            mac_address[5] = (mac_low >> 0) & 0xFF;
+            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, MAC2STR(mac_address));
+        }
+        else if (strlen(menu[html_index].name) > 0)
+        {
+            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/>%s</td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, value, menu[html_index].izm);
+        }
+        else // hidden
+        {
+            written += sprintf(&output_buffer[written], "<input type=\"hidden\" id=\"%s\" name=\"%s\" value=\"%g\">", menu[html_index].id, menu[html_index].id, value);
+        }
+
+        html_index++;
+    }
+
+    if (written > 0)
+    {
+        written += sprintf(&output_buffer[written], "</table><br>");
+    }
+    else
+    {
+        html_index = 0;
+    }
+
+    return written;
 }
 
 void console_task(void *arg)
 {
-    uint8_t serialbuffer[256];
-    bool espnow_send = false;
-    esp_now_peer_info_t peerInfo = {.ifidx = WIFI_IF_AP, .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, .channel = 0, .lmk = "", .encrypt = false};
+    uint8_t line_buffer[256];
 
-    int mac1;
-    int mac2;
-    uint8_t mac_addr[6];
-    int selected_menu_id = 0;
+    int mac_high;
+    int mac_low;
+    uint8_t mac_address[6];
+    int selected_menu_number = 0;
 
-    char *data = (char *)serialbuffer;
-    int pos = 0;
+    char *line = (char *)line_buffer;
+    int line_length = 0;
 
     while (1)
     {
-        const int c = fgetc(stdin);
-        if (c > 0) // EOF = -1
+        const int input_char = fgetc(stdin);
+        if (input_char > 0) // EOF = -1
         {
-            if (c == '\n')
+            if (input_char == '\n')
             {
-                data[pos] = 0;
+                line[line_length] = 0;
 
-                const int nc = fgetc(stdin); // remove CRLF
-                if (nc != '\n' && nc != '\r')
-                    ungetc(nc, stdin);
+                const int next_char = fgetc(stdin); // remove CRLF
+                if (next_char != EOF && next_char != '\n' && next_char != '\r')
+                    ungetc(next_char, stdin);
             }
             else
             {
-                if (pos < sizeof(serialbuffer))
-                    data[pos++] = c;
+                if (line_length < (int)sizeof(line_buffer) - 1)
+                    line[line_length++] = input_char;
             }
         }
         else
@@ -265,35 +301,35 @@ void console_task(void *arg)
             continue;
         }
 
-        if (c == '\n')
+        if (input_char == '\n')
         {
-            // ESP_LOG_BUFFER_HEXDUMP(TAG, data, pos + 1, ESP_LOG_INFO);
-            // ESP_LOGD(TAG, "Read bytes: '%s'", data);
-            float n = atoff((const char *)data);
-            switch (selected_menu_id)
+            // ESP_LOG_BUFFER_HEXDUMP(TAG, line, line_length + 1, ESP_LOG_INFO);
+            // ESP_LOGD(TAG, "Read bytes: '%s'", line);
+            float value = atoff((const char *)line);
+            switch (selected_menu_number)
             {
             case 0:
-                switch ((int)n)
+                switch ((int)value)
                 {
                 case 0: // Выводим меню
                     ESP_LOGI("menu", "-------------------------------------------");
-                    int i = 0;
-                    for (i = 0; i < sizeof(menu) / sizeof(menu_t); i++)
+                    int menu_index = 0;
+                    for (menu_index = 0; menu_index < sizeof(menu) / sizeof(menu_t); menu_index++)
                     {
-                        if (i == 1) // MAC
+                        if (menu_index == 1) // MAC
                         {
-                            mac1 = menu[1].val;
-                            mac2 = menu[2].val;
-                            mac_addr[0] = (mac1 >> 16) & 0xFF;
-                            mac_addr[1] = (mac1 >> 8) & 0xFF;
-                            mac_addr[2] = (mac1 >> 0) & 0xFF;
-                            mac_addr[3] = (mac2 >> 16) & 0xFF;
-                            mac_addr[4] = (mac2 >> 8) & 0xFF;
-                            mac_addr[5] = (mac2 >> 0) & 0xFF;
-                            ESP_LOGI("menu", "%2i. %s: " MACSTR, i + 1, menu[i].name, MAC2STR(mac_addr));
+                            mac_high = get_menu_val_by_id(menu[1].id);
+                            mac_low = get_menu_val_by_id(menu[2].id);
+                            mac_address[0] = (mac_high >> 16) & 0xFF;
+                            mac_address[1] = (mac_high >> 8) & 0xFF;
+                            mac_address[2] = (mac_high >> 0) & 0xFF;
+                            mac_address[3] = (mac_low >> 16) & 0xFF;
+                            mac_address[4] = (mac_low >> 8) & 0xFF;
+                            mac_address[5] = (mac_low >> 0) & 0xFF;
+                            ESP_LOGI("menu", "%2i. %s: " MACSTR, menu_index + 1, menu[menu_index].name, MAC2STR(mac_address));
                         }
-                        else if (strlen(menu[i].name) > 0)
-                            ESP_LOGI("menu", "%2i. %s: %g %s", i + 1, menu[i].name, menu[i].val, menu[i].izm);
+                        else if (strlen(menu[menu_index].name) > 0)
+                            ESP_LOGI("menu", "%2i. %s: %g %s", menu_index + 1, menu[menu_index].name, get_menu_val_by_id(menu[menu_index].id), menu[menu_index].izm);
                     }
 
                     ESP_LOGI("menu", "51. DEBUG! DAC1,DAC2 = 100%");
@@ -304,17 +340,17 @@ void console_task(void *arg)
                     ESP_LOGI("menu", "-------------------------------------------");
                     break;
                 case 2: // MAC
-                    mac1 = menu[1].val;
-                    mac2 = menu[2].val;
-                    mac_addr[0] = (mac1 >> 16) & 0xFF;
-                    mac_addr[1] = (mac1 >> 8) & 0xFF;
-                    mac_addr[2] = (mac1 >> 0) & 0xFF;
-                    mac_addr[3] = (mac2 >> 16) & 0xFF;
-                    mac_addr[4] = (mac2 >> 8) & 0xFF;
-                    mac_addr[5] = (mac2 >> 0) & 0xFF;
+                    mac_high = get_menu_val_by_id(menu[1].id);
+                    mac_low = get_menu_val_by_id(menu[2].id);
+                    mac_address[0] = (mac_high >> 16) & 0xFF;
+                    mac_address[1] = (mac_high >> 8) & 0xFF;
+                    mac_address[2] = (mac_high >> 0) & 0xFF;
+                    mac_address[3] = (mac_low >> 16) & 0xFF;
+                    mac_address[4] = (mac_low >> 8) & 0xFF;
+                    mac_address[5] = (mac_low >> 0) & 0xFF;
 
                     ESP_LOGI("menu", "-------------------------------------------");
-                    ESP_LOGI("menu", "%2i. %s: " MACSTR ". Введите новое значение: ", (int)n, menu[(int)n - 1].name, MAC2STR(mac_addr));
+                    ESP_LOGI("menu", "%2i. %s: " MACSTR ". Введите новое значение: ", (int)value, menu[(int)value - 1].name, MAC2STR(mac_address));
                     ESP_LOGI("menu", "-------------------------------------------");
                     break;
                 case 51: // all adc = 255
@@ -343,35 +379,38 @@ void console_task(void *arg)
                     esp_restart();
                     break;
                 default:
-                    if ((int)n > 0 && (int)n <= sizeof(menu) / sizeof(menu_t))
+                    if ((int)value > 0 && (int)value <= sizeof(menu) / sizeof(menu_t))
                     {
                         ESP_LOGI("menu", "-------------------------------------------");
-                        ESP_LOGI("menu", "%2i. %s: %g %s. Введите новое значение: ", (int)n, menu[(int)n - 1].name, menu[(int)n - 1].val, menu[(int)n - 1].izm);
+                        ESP_LOGI("menu", "%2i. %s: %g %s. Введите новое значение: ", (int)value, menu[(int)value - 1].name, get_menu_val_by_id(menu[(int)value - 1].id), menu[(int)value - 1].izm);
                         ESP_LOGI("menu", "-------------------------------------------");
                     }
                     else
                     {
-                        ESP_LOGE("menu", "Err: %g", n);
+                        ESP_LOGE("menu", "Err: %g", value);
                     }
                     break;
                 }
                 break;
             case 2: // MAC ESPNOW!
-                if (sscanf((const char *)serialbuffer, "%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx",
-                           &mac_addr[0], &mac_addr[1], &mac_addr[2], &mac_addr[3], &mac_addr[4], &mac_addr[5]) == 6)
+                if (sscanf((const char *)line_buffer, "%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx%*[: -]%hhx",
+                           &mac_address[0], &mac_address[1], &mac_address[2], &mac_address[3], &mac_address[4], &mac_address[5]) == 6)
                 {
-                    esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
-                    if (err == ESP_OK)
-                    {
-                        ESP_LOGD("NVS", "Write  \"%s\" : \"" MACSTR "\"", menu[1].id, MAC2STR(mac_addr));
-                        mac1 = (mac_addr[0] << 16) | (mac_addr[1] << 8) | (mac_addr[2]);
-                        menu[1].val = mac1;
-                        err = nvs_set_blob(my_handle, menu[1].id, &menu[1].val, sizeof(float));
+                    mac_high = (mac_address[0] << 16) | (mac_address[1] << 8) | (mac_address[2]);
+                    mac_low = (mac_address[3] << 16) | (mac_address[4] << 8) | (mac_address[5]);
 
-                        mac2 = (mac_addr[3] << 16) | (mac_addr[4] << 8) | (mac_addr[5]);
-                        menu[2].val = mac2;
-                        err = nvs_set_blob(my_handle, menu[2].id, &menu[2].val, sizeof(float));
-                        nvs_close(my_handle);
+                    esp_err_t mac_high_err = set_menu_val_by_id("MAC1", (float)mac_high);
+                    esp_err_t mac_low_err = (mac_high_err == ESP_OK) ? set_menu_val_by_id("MAC2", (float)mac_low) : mac_high_err;
+
+                    if (mac_high_err == ESP_OK && mac_low_err == ESP_OK)
+                    {
+                        ESP_LOGI("NVS", "MAC saved: " MACSTR, MAC2STR(mac_address));
+                        if (xHandleWifi)
+                            xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
+                    }
+                    else
+                    {
+                        ESP_LOGE(TAG, "Failed to save MAC: %s", esp_err_to_name(mac_low_err));
                     }
                 }
                 else
@@ -381,53 +420,31 @@ void console_task(void *arg)
                 break;
 
             default:
-                if (selected_menu_id > 0 && selected_menu_id <= sizeof(menu) / sizeof(menu_t)) // selected_menu_id - номер пункта меню, n - value
+                if (selected_menu_number > 0 && selected_menu_number <= sizeof(menu) / sizeof(menu_t)) // selected_menu_number - номер пункта меню, value - value
                 {
-                    if (n >= menu[selected_menu_id - 1].min && n <= menu[selected_menu_id - 1].max)
+                    int menu_index = selected_menu_number - 1;
+                    esp_err_t err = set_menu_val_by_id(menu[menu_index].id, value);
+                    if (err == ESP_OK)
                     {
-                        menu[selected_menu_id - 1].val = n;
-                        esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
-                        if (err != ESP_OK)
-                        {
-                            ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(err));
-                        }
-                        else
-                        {
-                            err = nvs_set_blob(my_handle, menu[selected_menu_id - 1].id, &n, sizeof(float));
-                            if (err != ESP_OK)
-                            {
-                                ESP_LOGE(TAG, "%s", esp_err_to_name(err));
-                            }
-                            else
-                            {
-                                ESP_LOGI("menu", "-------------------------------------------");
-                                ESP_LOGI("menu", "%2i. %s: %f %s.", selected_menu_id, menu[selected_menu_id - 1].name, menu[selected_menu_id - 1].val, menu[selected_menu_id - 1].izm);
-                                ESP_LOGI("menu", "-------------------------------------------");
-                            }
-                        }
-
-                        vTaskDelay(50 / portTICK_PERIOD_MS);
-                        parameters_changed = selected_menu_id;
-
-                        // ESP_LOGD(TAG, "Committing updates in NVS ... ");
-                        err = nvs_commit(my_handle);
-                        if (err != ESP_OK)
-                            ESP_LOGE(TAG, "Committing updates in NVS ... - Failed!");
-
-                        // Close
-                        nvs_close(my_handle);
+                        ESP_LOGI("menu", "-------------------------------------------");
+                        ESP_LOGI("menu", "%2i. %s: %f %s.", selected_menu_number, menu[menu_index].name, get_menu_val_by_id(menu[menu_index].id), menu[menu_index].izm);
+                        ESP_LOGI("menu", "-------------------------------------------");
+                    }
+                    else
+                    {
+                        ESP_LOGE("menu", "Rejected value %g: %s", value, esp_err_to_name(err));
                     }
                 }
                 break;
             }
 
-            if ((selected_menu_id == 0 && n > 0) && (n <= sizeof(menu) / sizeof(menu_t)))
-                selected_menu_id = n;
+            if ((selected_menu_number == 0 && value > 0) && (value <= sizeof(menu) / sizeof(menu_t)))
+                selected_menu_number = value;
             else
-                selected_menu_id = 0;
+                selected_menu_number = 0;
 
-            pos = 0;
-        } // if (c == '\n')
+            line_length = 0;
+        } // if (input_char == '\n')
         vTaskDelay(1);
     }
 }
@@ -467,23 +484,21 @@ blink_step_t const *led_indicator_blink_lists[] = {
     [BLINK_MAX] = NULL,
 };
 
-int key_mode = 0;
-#define KEY_TIMEOUT (5 * 1000 / 20)
-int key_timeout = KEY_TIMEOUT;
-int setup_curr = 25;
-int setup_cntr = 0;
+int wifi_button_mode = 0;
+#define WIFI_BUTTON_TIMEOUT_TICKS (5 * 1000 / 20)
+int wifi_button_timeout = WIFI_BUTTON_TIMEOUT_TICKS;
 
-static void button_event_cb(void *arg, void *data)
+static void button_event_cb(void *button_handle, void *user_data)
 {
-    // iot_button_print_event((button_handle_t)arg);
-    button_event_t event = iot_button_get_event((button_handle_t)arg);
+    // iot_button_print_event((button_handle_t)button_handle);
+    button_event_t event = iot_button_get_event((button_handle_t)button_handle);
     switch (event)
     {
     case BUTTON_SINGLE_CLICK:
-        if (key_mode != 1)
+        if (wifi_button_mode != 1)
         {
-            key_mode = 1;
-            ESP_ERROR_CHECK(led_indicator_start(led_handle_0, BLINK_TEST_BLINK_LOOP));
+            wifi_button_mode = 1;
+            ESP_ERROR_CHECK(led_indicator_start(status_led_handle, BLINK_TEST_BLINK_LOOP));
 
             run_stage = 999;
 
@@ -492,14 +507,14 @@ static void button_event_cb(void *arg, void *data)
         }
         else
         {
-            key_mode = -1;
-            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
+            wifi_button_mode = -1;
+            ESP_ERROR_CHECK(led_indicator_stop(status_led_handle, BLINK_TEST_BLINK_LOOP));
 
             if (xHandleWifi)
                 xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
         }
 
-        key_timeout = KEY_TIMEOUT;
+        wifi_button_timeout = WIFI_BUTTON_TIMEOUT_TICKS;
         break;
     case BUTTON_LONG_PRESS_START:
         break;
@@ -512,7 +527,7 @@ static void button_event_cb(void *arg, void *data)
     }
 }
 
-void btn_task(void *arg)
+void button_task(void *arg)
 {
     // create gpio button
     const button_config_t btn_cfg = {0};
@@ -521,41 +536,38 @@ void btn_task(void *arg)
         .active_level = 0,
     };
     button_handle_t btn;
-    esp_err_t ret = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &btn);
-    assert(ret == ESP_OK);
+    esp_err_t err = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &btn);
+    assert(err == ESP_OK);
 
-    ret = iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, NULL, button_event_cb, NULL);
-    ret |= iot_button_register_cb(btn, BUTTON_DOUBLE_CLICK, NULL, button_event_cb, NULL);
-    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, NULL, button_event_cb, NULL);
-    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_HOLD, NULL, button_event_cb, NULL);
-    ret |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_UP, NULL, button_event_cb, NULL);
+    err = iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, NULL, button_event_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_DOUBLE_CLICK, NULL, button_event_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, NULL, button_event_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_HOLD, NULL, button_event_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_UP, NULL, button_event_cb, NULL);
 
-    led_indicator_gpio_config_t led_indicator_gpio_config = {
+    led_indicator_gpio_config_t led_gpio_config = {
         .is_active_level_high = 1,
         .gpio_num = LED_PIN, /**< num of GPIO */
     };
 
-    led_indicator_config_t config = {
+    led_indicator_config_t led_config = {
         .blink_lists = led_indicator_blink_lists,
         .blink_list_num = BLINK_MAX,
     };
 
-    ESP_ERROR_CHECK(led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, &led_handle_0));
-    assert(led_handle_0 != NULL);
-
-    setup_current_active = menu[0].val;
+    ESP_ERROR_CHECK(led_indicator_new_gpio_device(&led_config, &led_gpio_config, &status_led_handle));
+    assert(status_led_handle != NULL);
 
     while (1)
     {
         // timeout key mode
-        if (key_mode != 0)
+        if (wifi_button_mode != 0)
         {
-            // xQueueOverwrite(xQueueDisplay, &setup_curr);
             /*
-                        if (key_timeout-- <= 0)
+                        if (wifi_button_timeout-- <= 0)
                         {
-                            ESP_ERROR_CHECK(led_indicator_stop(led_handle_0, BLINK_TEST_BLINK_LOOP));
-                            ESP_ERROR_CHECK(led_indicator_set_on_off(led_handle_0, 0));
+                            ESP_ERROR_CHECK(led_indicator_stop(status_led_handle, BLINK_TEST_BLINK_LOOP));
+                            ESP_ERROR_CHECK(led_indicator_set_on_off(status_led_handle, 0));
                         }
             */
         }
