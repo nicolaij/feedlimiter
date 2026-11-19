@@ -35,8 +35,6 @@
 
 extern QueueHandle_t xQueueDisplay;
 
-extern int parameters_changed;
-
 adc_continuous_handle_t adc_handle = NULL;
 
 volatile int run_stage = 1;
@@ -864,7 +862,7 @@ void display_task(void *arg)
     {
         if (xHandleWifi)
             xTaskNotify(xHandleWifi, NOTYFY_WIFI_ESPNOW, eSetValueWithOverwrite);
-        run_stage = 999;
+        run_stage_set(999);
 
         // ESP-NOW requires WiFi to be started before esp_now_init().
         if (xWifiReadySemaphore)

@@ -194,7 +194,7 @@ esp_err_t set_menu_val_by_id(const char *id, float value)
         if (err == ESP_OK)
         {
             menu[menu_index].val = value;
-            parameters_changed = menu_index;
+            parameters_changed_set(menu_index);
         }
         else
         {
