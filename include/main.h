@@ -71,6 +71,14 @@ static inline void run_stage_set(int stage)
     taskEXIT_CRITICAL(&g_control_mux);
 }
 
+static inline void run_stage_transition(int expected, int next)
+{
+    taskENTER_CRITICAL(&g_control_mux);
+    if (run_stage == expected)
+        run_stage = next;
+    taskEXIT_CRITICAL(&g_control_mux);
+}
+
 static inline void parameters_changed_set(int idx)
 {
     taskENTER_CRITICAL(&g_control_mux);
@@ -100,6 +108,7 @@ void display_task(void *arg);
 void wifi_task(void *arg);
 
 int build_menu_html(char *output_buffer);
+void reset_menu_html(void);
 
 esp_err_t ws_send_text(const char *payload, const int payload_length);
 

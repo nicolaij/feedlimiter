@@ -210,10 +210,16 @@ esp_err_t set_menu_val_by_id(const char *id, float value)
     return err;
 }
 
+static int html_index = 0;
+
+void reset_menu_html(void)
+{
+    html_index = 0;
+}
+
 int build_menu_html(char *output_buffer)
 {
     int written = 0;
-    static int html_index = 0;
 
     if (html_index == 0)
         written = sprintf(output_buffer, "<table>");

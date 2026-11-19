@@ -42,6 +42,8 @@ static EventGroupHandle_t s_wifi_event_group;
 static const char *TAGW = "wifi";
 static const char *TAGH = "httpd";
 
+#define WS_MAX_PAYLOAD 256
+
 static esp_netif_t *s_ap_netif = NULL;
 static esp_event_handler_instance_t s_wifi_event_instance = NULL;
 static httpd_handle_t s_httpd = NULL;
@@ -197,6 +199,7 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
     httpd_resp_send_chunk(req, mac_line, mac_line_length);
 
     httpd_resp_send_chunk(req, html_form_start, sizeof(html_form_start) - 1);
+    reset_menu_html();
     do
     {
         chunk_length = build_menu_html(network_buf);
@@ -614,6 +617,11 @@ static esp_err_t websocket_handler(httpd_req_t *req)
         return err;
     }
     ESP_LOGI(TAGH, "frame len is %d", ws_frame.len);
+    if (ws_frame.len > WS_MAX_PAYLOAD)
+    {
+        ESP_LOGW(TAGH, "WebSocket frame too large: %d", ws_frame.len);
+        return ESP_ERR_INVALID_SIZE;
+    }
     if (ws_frame.len)
     {
         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
@@ -708,6 +716,10 @@ static const httpd_uri_t ws = {
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
+    reset_menu_html();
+    ws_work_busy = false;
+    async_resp_arg.hd = NULL;
+    async_resp_arg.fd = -1;
     httpd_config_t server_config = HTTPD_DEFAULT_CONFIG();
     // config.max_open_sockets = 5;
     server_config.stack_size = 1024 * 5;
@@ -763,6 +775,14 @@ void wifi_task(void *arg)
 
         // ESP_LOGD("WIFI ulNotifiedValue", "0x%lX", ulNotifiedValue);
 
+        if ((notified_value & REBOOT_NOW) != 0)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_restart();
+        }
+        if ((notified_value & NOTYFY_WIFI_STOP) != 0)
+            continue;
+
         esp_err_t wifi_err;
         if ((notified_value & NOTYFY_WIFI_ESPNOW) != 0)
         {
@@ -781,6 +801,8 @@ void wifi_task(void *arg)
         else
         {
             ESP_LOGE(TAGW, "WiFi softAP start failed: %s", esp_err_to_name(wifi_err));
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
         }
 
         /* Start the server for the first time */
@@ -816,6 +838,9 @@ void wifi_task(void *arg)
 
             if ((notified_value & NOTYFY_WIFI_STOP) != 0)
             {
+                ws_work_busy = false;
+                async_resp_arg.hd = NULL;
+                async_resp_arg.fd = -1;
                 if (s_httpd)
                 {
                     httpd_stop(s_httpd);

@@ -77,7 +77,7 @@ static void adc_restart(uint32_t delay_ms)
         esp_restart();
     }
 
-    run_stage = 1;
+    run_stage_set(1);
 }
 
 static void load_pid_params(float *kp, float *ki, float *kd)
@@ -337,7 +337,7 @@ void adc_task(void *arg)
 
             if (!zero_offset_calibrated)
             {
-                run_stage = 1;
+                run_stage_set(1);
                 adc_zero_offset = measured_zero_offset;
                 zero_offset_calibrated = true;
                 ESP_LOGW("main", "ADC current offset: %d", adc_zero_offset);
@@ -485,7 +485,7 @@ void adc_task(void *arg)
                     current_history_ma[(uint8_t)(history_index - 3)] < idle_threshold_ma &&
                     current_history_ma[(uint8_t)(history_index - 4)] < idle_threshold_ma)
                 {
-                    run_stage = 4;
+                    run_stage_transition(5, 4);
                 }
             }
 
@@ -494,7 +494,7 @@ void adc_task(void *arg)
                 int idle_threshold_ma = idle_current_ma + idle_current_tolerance_a * 1000.0f;
                 if (current_history_ma[history_index] > idle_threshold_ma) // врезка
                 {
-                    run_stage = 5;
+                    run_stage_transition(4, 5);
                     if (isfinite(pid->Ki) && pid->Ki > 0.000001f)
                         pid->integral_err = (feed_speed - current_error_a * pid->Kp - current_error_a * pid->Kd) / pid->Ki;
                     else
@@ -506,7 +506,7 @@ void adc_task(void *arg)
                 int stop_threshold_ma = (idle_current_min_a - idle_current_tolerance_a) * 1000.0f;
                 if (current_history_ma[history_index] < stop_threshold_ma && current_history_ma[(uint8_t)(history_index - 1)] < stop_threshold_ma && current_history_ma[(uint8_t)(history_index - 2)] < stop_threshold_ma) // ВЫКЛ
                 {
-                    run_stage = 1;
+                    run_stage_transition(4, 1);
                 }
 
                 // ESP_LOGI("I", "%i - %i",xx,xxm);
@@ -519,8 +519,8 @@ void adc_task(void *arg)
                 {
                     feed_forward_state = 1;
 
-                    if (gpio_get_level(DISABLE_PIN) == 0 && history_ready)
-                        run_stage = 3;
+                    if (gpio_get_level(DISABLE_PIN) == 0 && history_ready && run_stage < 100)
+                        run_stage_set(3);
                 }
             }
             else
@@ -529,7 +529,7 @@ void adc_task(void *arg)
                     feed_forward_state = -1;
 
                 if (run_stage == 5)
-                    run_stage = 4;
+                    run_stage_transition(5, 4);
             }
 
             if (run_stage == 3 && history_ready) // фиксируем ХХ
@@ -538,7 +538,7 @@ void adc_task(void *arg)
                 ESP_LOGI("main", "XX: %d", idle_current_ma);
                 // Isetmin = (float)current_xx / 1000.0f;
                 // Iporog = Isetmin + Iconst + 1.0f;
-                run_stage = 4;
+                run_stage_transition(3, 4);
             }
 
             if (run_stage == 2 && history_ready) // ждем стабилизации тока +-1A
@@ -551,7 +551,7 @@ void adc_task(void *arg)
                     INRANGE(current_history_ma[history_index], current_history_ma[(uint8_t)(history_index - 5)] - tolerance_ma, current_history_ma[(uint8_t)(history_index - 5)] + tolerance_ma) &&
                     INRANGE(current_a, idle_current_min_a, idle_current_max_a))
                 {
-                    run_stage = 3;
+                    run_stage_transition(2, 3);
                 }
             }
 
@@ -559,7 +559,7 @@ void adc_task(void *arg)
             {
                 int start_threshold_ma = (idle_current_max_a + idle_current_tolerance_a) * 1000.0f;
                 if (current_history_ma[history_index] > start_threshold_ma && current_history_ma[(uint8_t)(history_index - 1)] > start_threshold_ma)
-                    run_stage = 2;
+                    run_stage_transition(1, 2);
 
                 // ESP_LOGD("main", "stage: %i Current: %i, %i, %i", run_stage, currents[currents_cnt], currents[(uint8_t)(currents_cnt - 1)], currents[(uint8_t)(currents_cnt - 2)]);
             };
@@ -567,7 +567,7 @@ void adc_task(void *arg)
             if (run_stage < 100)
             {
                 if (gpio_get_level(DISABLE_PIN) == 1) // блокировка работы алгоритма
-                    run_stage = 1;
+                    run_stage_set(1);
 
                 display_data.curr = (current_a > 1000.0f) ? 1000 : ((current_a < -1000.0f) ? -1000 : (int)(current_a + 0.5f)); // округление
                 display_data.dots = true;
