@@ -244,11 +244,11 @@ int build_menu_html(char *output_buffer)
             mac_address[3] = (mac_low >> 16) & 0xFF;
             mac_address[4] = (mac_low >> 8) & 0xFF;
             mac_address[5] = (mac_low >> 0) & 0xFF;
-            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, MAC2STR(mac_address));
+            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"" MACSTR "\"/></td><td></td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, MAC2STR(mac_address));
         }
         else if (strlen(menu[html_index].name) > 0)
         {
-            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/>%s</td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, value, menu[html_index].izm);
+            written += sprintf(&output_buffer[written], "<tr><td><label for=\"%s\">%s:</label></td><td><input type=\"text\" id=\"%s\" name=\"%s\" value=\"%g\"/></td><td>%s</td></tr>\n", menu[html_index].id, menu[html_index].name, menu[html_index].id, menu[html_index].id, value, menu[html_index].izm);
         }
         else // hidden
         {
