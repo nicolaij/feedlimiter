@@ -71,6 +71,22 @@ static inline void run_stage_set(int stage)
     taskEXIT_CRITICAL(&g_control_mux);
 }
 
+static inline void run_stage_transition(int expected, int next)
+{
+    taskENTER_CRITICAL(&g_control_mux);
+    if (run_stage == expected)
+        run_stage = next;
+    taskEXIT_CRITICAL(&g_control_mux);
+}
+
+static inline void run_stage_set_if_below(int stage, int limit)
+{
+    taskENTER_CRITICAL(&g_control_mux);
+    if (run_stage < limit)
+        run_stage = stage;
+    taskEXIT_CRITICAL(&g_control_mux);
+}
+
 static inline void parameters_changed_set(int idx)
 {
     taskENTER_CRITICAL(&g_control_mux);

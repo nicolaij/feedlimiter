@@ -159,19 +159,35 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
 {
     int chunk_length = 0;
 
-    const char html_head[] = "<!DOCTYPE html>\n"
+    static const char html_head[] = "<!DOCTYPE html>\n"
                          "<html><head>"
                          "<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />"
                          "<meta name=\"viewport\" content=\"width=device-width\" />"
                          "<title>Настройки</title>"
-                         "<meta charset=\"utf-8\"></head><body>";
+                         "<meta charset=\"utf-8\">"
+                         "<style>"
+                         "body{font-family:Arial,sans-serif;margin:16px;}"
+                         "#chart{width:100%;height:300px;background:#111;border-radius:6px;display:block;}"
+                         "#chartLegend{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:14px;}"
+                         "#chartLegend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:middle;}"
+                         "</style></head><body>";
 
-    const char html_form_start[] = "<form name=\"settings\" action=\"\" method=\"post\">"
+    static const char html_form_start[] = "<form name=\"settings\" action=\"\" method=\"post\">"
                          "<div id=\"settingscontent\">";
 
-    const char html_form_end[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br><textarea id=\"txt\" rows=\"10\" cols=\"100\" readonly></textarea>";
+    static const char html_form_end[] = "</div><input type=\"submit\" value=\"Submit\" /></form><br>";
 
-    const char html_debug[] = "<div>"
+    static const char html_chart[] = "<h3>Задание тока, ток пилы и выход PID</h3>"
+                         "<div id=\"chartLegend\">"
+                         "<span><i style=\"background:#4da3ff\"></i>Задание тока, A</span>"
+                         "<span><i style=\"background:#ff9f43\"></i>Ток, A</span>"
+                         "<span><i style=\"background:#2ecc71\"></i>PID / DAC, 0-255</span>"
+                         "</div>"
+                         "<canvas id=\"chart\" width=\"800\" height=\"300\"></canvas>";
+
+    static const char html_debug[] = "<textarea id=\"txt\" rows=\"10\" cols=\"100\" readonly></textarea>"
+                         "<div><button type=\"button\" onclick=\"scrollLogToBottom()\">Вниз</button></div>"
+                         "<div>"
                          "<button onclick=\"sendMessage('DAC=0')\">DEBUG! DAC = 0%</button>&nbsp;&nbsp;&nbsp;"
                          "<button onclick=\"sendMessage('DAC=127')\">DEBUG! DAC = 50%</button>&nbsp;&nbsp;&nbsp;"
                          "<button onclick=\"sendMessage('DAC=255')\">DEBUG! DAC = 100%</button>"
@@ -181,13 +197,126 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
                          "</div>"
                          "<br><div style=\"display: flex; gap: 10px;\">"
                          "</div>"
-                         "<script>\nconst socket = new WebSocket(\"ws://\" + location.host + \"/ws\");\n"
-                         "const textarea = document.getElementById(\"txt\");"
-                         "socket.onmessage = function (event) {"
-                         "textarea.value += event.data + \"\\n\";"
-                         "textarea.scrollTop = textarea.scrollHeight;"
-                         "};"
-                         "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}"
+                         "<script>\n"
+                         "const socket = new WebSocket('ws://' + location.host + '/ws');\n"
+                         "const textarea = document.getElementById('txt');\n"
+                         "const chart = document.getElementById('chart');\n"
+                         "const ctx = chart.getContext('2d');\n"
+                         "const chartData = { t: [], target: [], current: [], dac: [] };\n"
+                         "const WINDOW_MS = 60000;\n"
+                         "const MAX_DAC = 255;\n"
+                         "function appendLog(line) {\n"
+                         "    if (!line) return;\n"
+                         "    const atBottom = textarea.scrollTop + textarea.clientHeight >= textarea.scrollHeight - 8;\n"
+                         "    const oldTop = textarea.scrollTop;\n"
+                         "    textarea.value += line + '\\n';\n"
+                         "    const heightWithLine = textarea.scrollHeight;\n"
+                         "    const lines = textarea.value.split('\\n');\n"
+                         "    if (lines.length > 400) {\n"
+                         "        textarea.value = lines.slice(-400).join('\\n');\n"
+                         "        if (!atBottom) {\n"
+                         "            const removedHeight = heightWithLine - textarea.scrollHeight;\n"
+                         "            textarea.scrollTop = Math.max(0, oldTop - removedHeight);\n"
+                         "        }\n"
+                         "    } else if (!atBottom) {\n"
+                         "        textarea.scrollTop = oldTop;\n"
+                         "    }\n"
+                         "    if (atBottom) textarea.scrollTop = textarea.scrollHeight;\n"
+                         "}\n"
+                         "function scrollLogToBottom() {\n"
+                         "    textarea.scrollTop = textarea.scrollHeight;\n"
+                         "}\n"
+                         "function drawChart() {\n"
+                         "    const width = chart.clientWidth;\n"
+                         "    const height = chart.clientHeight;\n"
+                         "    if (!width || !height) return;\n"
+                         "    ctx.clearRect(0, 0, width, height);\n"
+                         "    const left = 44, right = 44, top = 16, bottom = 24;\n"
+                         "    const plotW = Math.max(1, width - left - right);\n"
+                         "    const plotH = Math.max(1, height - top - bottom);\n"
+                         "    let maxA = 1;\n"
+                         "    for (const v of chartData.target) if (Number.isFinite(v)) maxA = Math.max(maxA, v);\n"
+                         "    for (const v of chartData.current) if (Number.isFinite(v)) maxA = Math.max(maxA, v);\n"
+                         "    maxA = Math.ceil(maxA / 5) * 5;\n"
+                         "    ctx.font = '12px sans-serif';\n"
+                         "    ctx.lineWidth = 1;\n"
+                         "    ctx.textBaseline = 'middle';\n"
+                         "    for (let i = 0; i <= 4; i++) {\n"
+                         "        const y = top + plotH * i / 4;\n"
+                         "        ctx.strokeStyle = '#333';\n"
+                         "        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + plotW, y); ctx.stroke();\n"
+                         "        ctx.fillStyle = '#aaa';\n"
+                         "        ctx.textAlign = 'right'; ctx.fillText((maxA * (1 - i / 4)).toFixed(1), left - 6, y);\n"
+                         "        ctx.textAlign = 'left'; ctx.fillText(Math.round(MAX_DAC * (1 - i / 4)), left + plotW + 6, y);\n"
+                         "    }\n"
+                         "    ctx.textAlign = 'center';\n"
+                         "    for (let i = 0; i <= 4; i++) {\n"
+                         "        const x = left + plotW * i / 4;\n"
+                         "        ctx.strokeStyle = '#333';\n"
+                         "        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + plotH); ctx.stroke();\n"
+                         "        ctx.fillStyle = '#aaa';\n"
+                         "        ctx.fillText(i === 4 ? 'сейчас' : '-' + Math.round((4 - i) * WINDOW_MS / 4000) + 'с', x, height - 8);\n"
+                         "    }\n"
+                         "    const now = performance.now();\n"
+                         "    const windowStart = now - WINDOW_MS;\n"
+                         "    const xAt = t => left + plotW * Math.max(0, Math.min(1, (t - windowStart) / WINDOW_MS));\n"
+                         "    const yA = v => top + plotH * (1 - Math.max(0, Math.min(1, v / maxA)));\n"
+                         "    const yD = v => top + plotH * (1 - Math.max(0, Math.min(1, v / MAX_DAC)));\n"
+                         "    function drawLine(values, yFn, color) {\n"
+                         "        ctx.beginPath();\n"
+                         "        ctx.strokeStyle = color;\n"
+                         "        ctx.lineWidth = 2;\n"
+                         "        let started = false;\n"
+                         "        for (let i = 0; i < chartData.t.length; i++) {\n"
+                         "            if (!Number.isFinite(values[i])) continue;\n"
+                         "            const x = xAt(chartData.t[i]);\n"
+                         "            const y = yFn(values[i]);\n"
+                         "            if (!started) { ctx.moveTo(x, y); started = true; }\n"
+                         "            else ctx.lineTo(x, y);\n"
+                         "        }\n"
+                         "        if (started) ctx.stroke();\n"
+                         "    }\n"
+                         "    drawLine(chartData.target, yA, '#4da3ff');\n"
+                         "    drawLine(chartData.current, yA, '#ff9f43');\n"
+                         "    drawLine(chartData.dac, yD, '#2ecc71');\n"
+                         "    if (!chartData.t.length) {\n"
+                         "        ctx.fillStyle = '#888';\n"
+                         "        ctx.textAlign = 'center';\n"
+                         "        ctx.fillText('Ожидание данных...', left + plotW / 2, top + plotH / 2);\n"
+                         "    }\n"
+                         "}\n"
+                         "function addSample(target, current, dac) {\n"
+                         "    const now = performance.now();\n"
+                         "    chartData.t.push(now); chartData.target.push(target); chartData.current.push(current); chartData.dac.push(dac);\n"
+                         "    while (chartData.t.length && chartData.t[0] < now - WINDOW_MS) {\n"
+                         "        chartData.t.shift(); chartData.target.shift(); chartData.current.shift(); chartData.dac.shift();\n"
+                         "    }\n"
+                         "    while (chartData.t.length > 1200) {\n"
+                         "        chartData.t.shift(); chartData.target.shift(); chartData.current.shift(); chartData.dac.shift();\n"
+                         "    }\n"
+                         "    drawChart();\n"
+                         "}\n"
+                         "function setupChart() {\n"
+                         "    const dpr = window.devicePixelRatio || 1;\n"
+                         "    const rect = chart.getBoundingClientRect();\n"
+                         "    chart.width = Math.max(1, Math.round(rect.width * dpr));\n"
+                         "    chart.height = Math.max(1, Math.round(rect.height * dpr));\n"
+                         "    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);\n"
+                         "    drawChart();\n"
+                         "}\n"
+                         "function handleMessage(msg) {\n"
+                         "    const currentMatch = msg.match(/Current:\\s*(-?\\d+(?:\\.\\d+)?)/);\n"
+                         "    const targetMatch = msg.match(/Set:\\s*(-?\\d+(?:\\.\\d+)?)/);\n"
+                         "    const dacMatch = msg.match(/DAC:\\s*(\\d+)/);\n"
+                         "    if (currentMatch && targetMatch && dacMatch) {\n"
+                         "        addSample(Number(targetMatch[1]), Number(currentMatch[1]), Number(dacMatch[1]));\n"
+                         "    }\n"
+                         "    appendLog(msg);\n"
+                         "}\n"
+                         "socket.onmessage = function (event) { handleMessage(String(event.data)); };\n"
+                         "function sendMessage(value) {if (socket.readyState === WebSocket.OPEN) {socket.send(value.toString())};}\n"
+                         "window.addEventListener('resize', setupChart);\n"
+                         "setupChart();\n"
                          "</script>"
                          "</body></html>";
 
@@ -208,6 +337,7 @@ static esp_err_t menu_get_handler(httpd_req_t *req)
     } while (chunk_length > 0);
 
     httpd_resp_send_chunk(req, html_form_end, sizeof(html_form_end) - 1);
+    httpd_resp_send_chunk(req, html_chart, sizeof(html_chart) - 1);
     httpd_resp_send_chunk(req, html_debug, sizeof(html_debug) - 1);
     httpd_resp_sendstr_chunk(req, NULL);
     return ESP_OK;
@@ -256,6 +386,10 @@ static esp_err_t menu_post_handler(httpd_req_t *req)
     }
 
     network_buf[received_bytes] = '\0';
+
+    const float old_idn = get_menu_val_by_id("idn");
+    const float old_mac1 = get_menu_val_by_id("MAC1");
+    const float old_mac2 = get_menu_val_by_id("MAC2");
 
     char *cursor = network_buf;
     char field_name[16];
@@ -326,8 +460,16 @@ static esp_err_t menu_post_handler(httpd_req_t *req)
             cursor = cursor + 1;
     }
 
-    if (xHandleWifi)
+    const bool reboot_required =
+        get_menu_val_by_id("idn") != old_idn ||
+        get_menu_val_by_id("MAC1") != old_mac1 ||
+        get_menu_val_by_id("MAC2") != old_mac2;
+
+    if (reboot_required && xHandleWifi)
+    {
+        ESP_LOGW(TAGH, "Reboot required: device number or ESP-NOW MAC changed");
         xTaskNotify(xHandleWifi, REBOOT_NOW, eSetValueWithOverwrite);
+    }
 
     // End response
     return menu_get_handler(req);
